@@ -1,0 +1,18 @@
+*.aux
+*.log
+*.out
+*.synctex.gz
+*.bbl
+*.blg
+.DS_Store
+# never commit credentials
+secrets.h
+.env
+backend/.env
+mosquitto/certs/
+mosquitto/passwd
+__pycache__/
+*.pyc
+*.db
+.pytest_cache/
+.pio/

@@ -1,0 +1,5 @@
+# Count the paper (LaTeX) and its figures as documentation, not as project code,
+# so the GitHub language bar reflects the firmware, backend and analysis code.
+docs/** linguist-documentation
+*.cls linguist-vendored
+*.ino linguist-language=C++

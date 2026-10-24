@@ -1,0 +1,35 @@
+# Local development stack: PostgreSQL + Mosquitto (MQTT over TLS) + FastAPI backend.
+# STATUS: written, not yet run end-to-end. See README for the certificate and
+# password-file steps that Mosquitto needs before it will start.
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: jalbhoomi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: jalbhoomi
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "8883:8883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/passwd:/mosquitto/config/passwd:ro
+      - ./mosquitto/certs:/mosquitto/certs:ro
+
+  backend:
+    build: ./backend
+    env_file: ./backend/.env
+    depends_on:
+      - postgres
+      - mosquitto
+    volumes:
+      - ./mosquitto/certs:/certs:ro
+    ports:
+      - "8000:8000"
+
+volumes:
+  pgdata:
