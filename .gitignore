@@ -21,3 +21,5 @@ __pycache__/
 sim_summaries.csv
 summaries.csv
 backend/*.csv
+data/
+ml/results/*.joblib

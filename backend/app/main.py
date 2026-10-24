@@ -290,6 +290,26 @@ def water_saved(device_id: str, since: datetime | None = None, db: Session = Dep
                       basis="skip episodes (one alert per 30 min while skipping) x mean litres per measured cycle; an estimate")
 
 
+def _benchmark_dir():
+    from pathlib import Path
+    return Path(config.BENCHMARK_DIR) if config.BENCHMARK_DIR else Path(__file__).resolve().parents[2] / "ml" / "results"
+
+
+@app.get("/benchmarks")
+def list_benchmarks():
+    """Evaluation results of models trained on PUBLIC datasets (tools/train_decision_model.py).
+    These describe the datasets only, never the JalBhoomi hardware; every item says so."""
+    out = []
+    d = _benchmark_dir()
+    if d.is_dir():
+        for f in sorted(d.glob("decision_*.json")):
+            try:
+                out.append(json.loads(f.read_text(encoding="utf-8")))
+            except (OSError, ValueError):
+                continue
+    return {"note": "Public-dataset benchmarks. Not measurements of the JalBhoomi hardware.", "benchmarks": out}
+
+
 @app.get("/devices/{device_id}/advice")
 def get_advice(device_id: str, db: Session = Depends(get_db)):
     """Probability that soil moisture drops below the dry threshold within the

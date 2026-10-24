@@ -41,3 +41,6 @@ REQUIRE_AUTH_FOR_READS = env_bool("REQUIRE_AUTH_FOR_READS", False)
 # It only stores advisory predictions; it never sends commands by itself.
 PREDICTION_JOB_ENABLED = env_bool("PREDICTION_JOB_ENABLED", True)
 PREDICTION_INTERVAL_S = int(os.getenv("PREDICTION_INTERVAL_S", "900"))
+
+# Folder with public-dataset benchmark results written by tools/train_decision_model.py
+BENCHMARK_DIR = os.getenv("BENCHMARK_DIR", "")   # default: <repo>/ml/results
