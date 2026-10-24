@@ -24,6 +24,11 @@ def advise(rows: pd.DataFrame) -> dict:
         return {"model_loaded": False, "reason": "no trained model file found"}
     if bundle["synthetic"] and not ALLOW_SYNTHETIC:
         return {"model_loaded": False, "reason": "model was trained on synthetic data"}
+    if bundle.get("data_source") == "public_benchmark":
+        return {"model_loaded": False,
+                "reason": "model was trained on a public benchmark dataset, not on this system's own logs"}
+    if float(bundle.get("row_minutes", 1.0)) != 1.0:
+        return {"model_loaded": False, "reason": "model expects a different row spacing than the device's 1 minute"}
     if len(rows) < HISTORY_ROWS_NEEDED:
         return {"model_loaded": True, "ready": False,
                 "reason": f"need at least {HISTORY_ROWS_NEEDED} recent rows, have {len(rows)}"}

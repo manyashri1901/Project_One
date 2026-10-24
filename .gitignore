@@ -16,3 +16,8 @@ __pycache__/
 *.db
 .pytest_cache/
 .pio/
+
+*.joblib
+sim_summaries.csv
+summaries.csv
+backend/*.csv

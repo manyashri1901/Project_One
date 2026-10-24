@@ -3,6 +3,7 @@ Random Forest and Gradient Boosting on per-minute summary rows.
 
   python -m app.ml.train summaries.csv --dry-pct 30 --horizon-min 360 --out model.joblib
   python -m app.ml.train --synthetic            # pipeline smoke test ONLY (fake data)
+  python -m app.ml.train public.csv --row-minutes 15 --public-benchmark --dry-pct 30   # PUBLIC dataset (tools/prepare_public_dataset.py)
 
 The label is "soil moisture will drop below --dry-pct within --horizon-min
 minutes". The split is by TIME (first 70 % train, last 30 % test), never
@@ -17,7 +18,7 @@ import pandas as pd
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 
-from .features import FEATURES, MIN_HISTORY_ROWS, add_labels, prepare
+from .features import FEATURES, add_labels, history_rows, prepare
 from .synthetic import make_synthetic
 
 MIN_ROWS_REAL = 2880          # about 2 days of one-minute rows
@@ -42,6 +43,10 @@ def main(argv=None):
     ap.add_argument("--dry-pct", type=float, default=30.0)
     ap.add_argument("--horizon-min", type=int, default=360, help="6 h; the report uses 6-24 h")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--row-minutes", type=float, default=1.0,
+                    help="minutes between rows (1 for this device's summaries; larger for a coarser public dataset)")
+    ap.add_argument("--public-benchmark", action="store_true",
+                    help="data is a PUBLIC dataset, not this system's logs: the model is flagged and never used by the backend")
     a = ap.parse_args(argv)
 
     if a.synthetic:
@@ -53,12 +58,14 @@ def main(argv=None):
     else:
         ap.error("give a summaries CSV, or --synthetic")
 
-    d = prepare(raw)
-    gap = d["epoch"].diff().median() if (d["epoch"] > 0).any() else 60
-    if gap and abs(gap - 60) > 5:
-        print(f"WARNING: median row spacing is {gap:.0f} s, expected 60 s; windows assume 1 row per minute.")
-    data = add_labels(d, a.dry_pct, a.horizon_min)
-    data = data.iloc[MIN_HISTORY_ROWS:]
+    d = prepare(raw, a.row_minutes)
+    expected = a.row_minutes * 60
+    gap = d["epoch"].diff().median() if (d["epoch"] > 0).any() else expected
+    if gap and abs(gap - expected) > 0.1 * expected:
+        print(f"WARNING: median row spacing is {gap:.0f} s but --row-minutes {a.row_minutes:g} means {expected:.0f} s; "
+              f"windows are computed from --row-minutes.")
+    data = add_labels(d, a.dry_pct, a.horizon_min, a.row_minutes)
+    data = data.iloc[history_rows(a.row_minutes):]
 
     npos = int(data["label"].sum())
     print(f"rows usable={len(data)}  positives={npos}  negatives={len(data) - npos}")
@@ -89,9 +96,15 @@ def main(argv=None):
     print(pd.DataFrame(results).round(3).to_string(index=False))
 
     best = max(results, key=lambda r: r["f1"])["model"]
-    out = a.out or ("model_SYNTHETIC.joblib" if a.synthetic else "model.joblib")
+    out = a.out or ("model_SYNTHETIC.joblib" if a.synthetic else
+                    "model_PUBLIC_BENCHMARK.joblib" if a.public_benchmark else "model.joblib")
+    if a.public_benchmark:
+        print("NOTE: trained on a PUBLIC dataset. These scores describe that dataset only, NOT this system. "
+              "The backend will not use this model.")
     joblib.dump({"model": fitted[best], "name": best, "features": FEATURES, "dry_pct": a.dry_pct,
                  "horizon_min": a.horizon_min, "synthetic": bool(a.synthetic),
+                 "row_minutes": a.row_minutes,
+                 "data_source": "synthetic" if a.synthetic else ("public_benchmark" if a.public_benchmark else "device"),
                  "train_rows": len(train), "test_rows": len(test), "metrics": results}, out)
     print(f"saved {best} to {out}")
 
