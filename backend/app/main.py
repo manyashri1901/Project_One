@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 import pandas as pd
 
-from . import advice, config, consolidate, dashboard, firebase_sync, ingest
+from . import advice, config, consolidate, dashboard, firebase_sync, ingest, livesim
 from .db import Base, SessionLocal, engine, get_db
 from datetime import timedelta, timezone
 
@@ -61,11 +61,13 @@ async def lifespan(_app: FastAPI):
     Base.metadata.create_all(engine)
     firebase_sync.init()
     client = ingest.start_mqtt() if config.MQTT_ENABLED else None
+    livesim.start_from_config()          # no-op unless LIVE_SIM_ENABLED=true
     stop = threading.Event()
     if config.PREDICTION_JOB_ENABLED:
         threading.Thread(target=_prediction_loop, args=(stop,), daemon=True, name="prediction-job").start()
     yield
     stop.set()
+    livesim.stop()
     if client is not None:
         client.loop_stop()
         client.disconnect()
@@ -116,6 +118,7 @@ def read_access(request: Request, x_api_key: str = Header(default=""), authoriza
 app = FastAPI(title="JalBhoomi backend", version="0.4.0", lifespan=lifespan,
               dependencies=[Depends(read_access)])
 app.include_router(dashboard.make_router(require_api_key))
+app.include_router(livesim.make_router(require_api_key))
 
 
 def _device_or_404(db: Session, device_id: str) -> Device:

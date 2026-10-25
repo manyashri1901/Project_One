@@ -146,6 +146,9 @@ def handle_message(topic: str, payload: bytes) -> bool:
 
 def publish_command(device_id: str, payload: dict) -> bool:
     """Publish an advisory command. False if MQTT is not connected."""
+    from . import livesim            # lazy import: only the demo simulator's own device id is routed there
+    if livesim.handles(device_id):
+        return livesim.deliver(device_id, payload)
     if _client is None or not _client.is_connected():
         return False
     topic = f"{config.MQTT_TOPIC_PREFIX}/{device_id}/cmd"

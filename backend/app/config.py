@@ -54,3 +54,11 @@ CLOUD_DATABASE_URL = os.getenv("CLOUD_DATABASE_URL", "")
 # A "soil dry for too long" alert is raised when the soil stays below the dry threshold, with the pump off,
 # for this many minutes. 60 is a prototype default, not an agronomic value.
 SOIL_ALERT_MINUTES = int(os.getenv("SOIL_ALERT_MINUTES", "60"))
+
+# Live demo simulator (backend/app/livesim.py): a SIMULATED board that runs inside the backend so the dashboard and
+# the app can be shown working end to end without hardware. Off by default; it has its own device id and never
+# touches a real board. Every value it produces is invented.
+LIVE_SIM_ENABLED = env_bool("LIVE_SIM_ENABLED", False)
+LIVE_SIM_DEVICE_ID = os.getenv("LIVE_SIM_DEVICE_ID", "sim-live-01")
+LIVE_SIM_SCENARIO = os.getenv("LIVE_SIM_SCENARIO", "normal")
+LIVE_SIM_SPEED = int(os.getenv("LIVE_SIM_SPEED", "30"))
