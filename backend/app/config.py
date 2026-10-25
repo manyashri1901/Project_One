@@ -44,3 +44,13 @@ PREDICTION_INTERVAL_S = int(os.getenv("PREDICTION_INTERVAL_S", "900"))
 
 # Folder with public-dataset benchmark results written by tools/train_decision_model.py
 BENCHMARK_DIR = os.getenv("BENCHMARK_DIR", "")   # default: <repo>/ml/results
+
+
+# Consolidated data in the cloud (faculty requirement: every timestamped reading stays in the LOCAL database;
+# only consolidated per-cycle and per-day rows go to the cloud). Empty = no cloud database configured.
+# Example: postgresql+psycopg2://USER:PASSWORD@HOST/DBNAME?sslmode=require   (treat it like a password)
+CLOUD_DATABASE_URL = os.getenv("CLOUD_DATABASE_URL", "")
+
+# A "soil dry for too long" alert is raised when the soil stays below the dry threshold, with the pump off,
+# for this many minutes. 60 is a prototype default, not an agronomic value.
+SOIL_ALERT_MINUTES = int(os.getenv("SOIL_ALERT_MINUTES", "60"))

@@ -1,0 +1,212 @@
+{
+  "name": "amritpal",
+  "task": "irrigate-now classifier (same-moment decision, not a 6-24 h forecast)",
+  "data_source": "public_benchmark",
+  "dataset_file": "Soil_Moisture__Air_Temperature_and_humidity__and_Water_Motor_onoff_Monitor_data_AmritpalKaur_1.csv",
+  "dataset_source": "Amritpal Kaur, <site or link>, <licence>",
+  "label_column": "Pump Data",
+  "features": [
+    "Soil Moisture",
+    "Temperature",
+    "Air Humidity"
+  ],
+  "rows": 3000,
+  "class_counts": {
+    "0": 1431,
+    "1": 1569
+  },
+  "duplicate_rows": 0,
+  "split": "stratified 70/30, seed 42; train=2100, test=900; 5-fold CV on the training part",
+  "baseline": {
+    "accuracy": 0.5233,
+    "precision": 0.5233,
+    "recall": 1.0,
+    "f1": 0.6871,
+    "roc_auc": 0.5,
+    "confusion_matrix": {
+      "tn": 0,
+      "fp": 429,
+      "fn": 0,
+      "tp": 471
+    },
+    "description": "always predict class 1 (the majority class in the training part)"
+  },
+  "models": [
+    {
+      "model": "RandomForest",
+      "cv_f1_mean": 1.0,
+      "cv_f1_std": 0.0,
+      "accuracy": 0.9956,
+      "precision": 0.9916,
+      "recall": 1.0,
+      "f1": 0.9958,
+      "roc_auc": 0.9988,
+      "confusion_matrix": {
+        "tn": 425,
+        "fp": 4,
+        "fn": 0,
+        "tp": 471
+      }
+    },
+    {
+      "model": "GradientBoosting",
+      "cv_f1_mean": 1.0,
+      "cv_f1_std": 0.0,
+      "accuracy": 0.9956,
+      "precision": 0.9916,
+      "recall": 1.0,
+      "f1": 0.9958,
+      "roc_auc": 0.9953,
+      "confusion_matrix": {
+        "tn": 425,
+        "fp": 4,
+        "fn": 0,
+        "tp": 471
+      }
+    }
+  ],
+  "best_model": "RandomForest",
+  "top_features": [
+    {
+      "feature": "Soil Moisture",
+      "importance": 0.9788
+    },
+    {
+      "feature": "Air Humidity",
+      "importance": 0.0108
+    },
+    {
+      "feature": "Temperature",
+      "importance": 0.0104
+    }
+  ],
+  "verdict": "CLEAR SIGNAL on this dataset. It still says nothing about the JalBhoomi sensor.",
+  "caveats": [
+    "Public dataset, not collected with the JalBhoomi hardware: says nothing about its accuracy.",
+    "Rows are not a time series, so this is not the 6-24 h prediction described in the report.",
+    "The backend never uses this model to advise a real device."
+  ],
+  "sample_predictions": [
+    {
+      "Soil Moisture": 980.485,
+      "Temperature": 36.101,
+      "Air Humidity": 75.151,
+      "actual": 0,
+      "predicted": 0,
+      "probability_irrigate": 0.015
+    },
+    {
+      "Soil Moisture": 519.745,
+      "Temperature": 24.884,
+      "Air Humidity": 66.149,
+      "actual": 1,
+      "predicted": 1,
+      "probability_irrigate": 0.995
+    },
+    {
+      "Soil Moisture": 541.462,
+      "Temperature": 23.014,
+      "Air Humidity": 67.319,
+      "actual": 1,
+      "predicted": 1,
+      "probability_irrigate": 0.998
+    },
+    {
+      "Soil Moisture": 318.223,
+      "Temperature": 22.31,
+      "Air Humidity": 78.221,
+      "actual": 1,
+      "predicted": 1,
+      "probability_irrigate": 0.998
+    },
+    {
+      "Soil Moisture": 803.937,
+      "Temperature": 20.091,
+      "Air Humidity": 69.969,
+      "actual": 0,
+      "predicted": 0,
+      "probability_irrigate": 0.004
+    },
+    {
+      "Soil Moisture": 856.292,
+      "Temperature": 28.653,
+      "Air Humidity": 61.455,
+      "actual": 0,
+      "predicted": 0,
+      "probability_irrigate": 0.0
+    },
+    {
+      "Soil Moisture": 737.277,
+      "Temperature": 36.803,
+      "Air Humidity": 41.751,
+      "actual": 0,
+      "predicted": 0,
+      "probability_irrigate": 0.026
+    },
+    {
+      "Soil Moisture": 844.773,
+      "Temperature": 25.423,
+      "Air Humidity": 76.55,
+      "actual": 0,
+      "predicted": 0,
+      "probability_irrigate": 0.0
+    },
+    {
+      "Soil Moisture": 846.755,
+      "Temperature": 33.637,
+      "Air Humidity": 41.801,
+      "actual": 0,
+      "predicted": 0,
+      "probability_irrigate": 0.015
+    },
+    {
+      "Soil Moisture": 981.088,
+      "Temperature": 20.848,
+      "Air Humidity": 39.41,
+      "actual": 0,
+      "predicted": 0,
+      "probability_irrigate": 0.013
+    },
+    {
+      "Soil Moisture": 861.763,
+      "Temperature": 38.661,
+      "Air Humidity": 39.234,
+      "actual": 0,
+      "predicted": 0,
+      "probability_irrigate": 0.033
+    },
+    {
+      "Soil Moisture": 651.649,
+      "Temperature": 19.284,
+      "Air Humidity": 77.633,
+      "actual": 1,
+      "predicted": 1,
+      "probability_irrigate": 0.977
+    },
+    {
+      "Soil Moisture": 344.498,
+      "Temperature": 25.948,
+      "Air Humidity": 60.295,
+      "actual": 1,
+      "predicted": 1,
+      "probability_irrigate": 0.998
+    },
+    {
+      "Soil Moisture": 701.385,
+      "Temperature": 24.202,
+      "Air Humidity": 39.378,
+      "actual": 0,
+      "predicted": 0,
+      "probability_irrigate": 0.021
+    },
+    {
+      "Soil Moisture": 939.625,
+      "Temperature": 34.124,
+      "Air Humidity": 65.379,
+      "actual": 0,
+      "predicted": 0,
+      "probability_irrigate": 0.005
+    }
+  ],
+  "generated_at": "2026-10-25T05:21:51+00:00"
+}

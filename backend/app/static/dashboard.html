@@ -1,0 +1,846 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>JalBhoomi dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  /* Blue and white. Chart colours are fixed per quantity: soil = teal, water = blue, pump = orange. */
+  :root {
+    color-scheme: light;
+    --plane: #f1f5fb; --surface: #ffffff; --ink: #0f1f3d; --ink2: #4a5b78; --muted: #8392ad;
+    --grid: #e5ecf6; --axis: #c5d1e3; --ring: rgba(15,31,61,0.10); --wash: rgba(31,111,235,0.06);
+    --brand: #0d3b85; --accent: #1a5fd1;
+    --blue: #2a78d6; --orange: #eb6834; --aqua: #1baf7a;
+    --good: #0ca30c; --warn: #fab219; --serious: #ec835a; --crit: #d03b3b;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --plane: #0a1120; --surface: #121b2f; --ink: #e8eefb; --ink2: #aebbd3; --muted: #7d8cab;
+    --grid: #22304a; --axis: #31425f; --ring: rgba(255,255,255,0.10); --wash: rgba(90,150,240,0.10);
+    --brand: #0a2a5e; --accent: #5598e7;
+    --blue: #3987e5; --orange: #d95926; --aqua: #199e70;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--plane); color: var(--ink);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  h1, h2, h3, p { margin: 0; }
+  button, select, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* title band and the filter bar */
+  .band { background: var(--brand); color: #fff; }
+  .band-in { max-width: 1180px; margin: 0 auto; padding: 16px 20px; display: flex; align-items: center; gap: 14px; }
+  .band svg.logo { width: 36px; height: 36px; flex: none; }
+  .band h1 { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; line-height: 1.2; }
+  .band small { display: block; font-size: 13px; opacity: 0.8; font-weight: 400; }
+  .band .stamp { margin-left: auto; font-size: 12.5px; opacity: 0.85; text-align: right; }
+  .bar { position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--ring); }
+  .bar-in { max-width: 1180px; margin: 0 auto; padding: 9px 20px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+  .field { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink2); }
+  select, input { padding: 7px 10px; border-radius: 8px; border: 1px solid var(--axis); background: var(--surface); }
+  select { padding-right: 6px; max-width: 200px; }
+  input[type=number] { width: 92px; }
+  input[type=password] { width: 150px; }
+  .seg { display: inline-flex; border: 1px solid var(--axis); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; background: transparent; padding: 7px 14px; cursor: pointer; font-size: 13px; color: var(--ink2); }
+  .seg button + button { border-left: 1px solid var(--axis); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; font-weight: 600; }
+  .btn { border: 1px solid var(--axis); background: var(--surface); padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; }
+  .btn:hover { background: var(--wash); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.danger { background: var(--crit); border-color: var(--crit); color: #fff; }
+  .btn.danger:hover { filter: brightness(1.06); }
+  .btn.icon { padding: 7px 9px; display: inline-flex; }
+  .btn.icon svg { width: 16px; height: 16px; }
+  .grow { margin-left: auto; display: flex; gap: 8px; }
+
+  main { max-width: 1180px; margin: 0 auto; padding: 18px 20px 48px; display: grid; gap: 30px; }
+  .notice { padding: 10px 14px; border-radius: 10px; border: 1px solid var(--ring); border-left: 4px solid var(--orange); background: var(--surface); font-size: 13.5px; }
+  .notice b { font-weight: 650; }
+  .notice.board { border-left-color: var(--good); } .notice.sim { border-left-color: var(--accent); }
+  .err { color: var(--crit); font-size: 13.5px; margin-top: 6px; }
+  .err[hidden] { display: none; }
+
+  .block { display: grid; gap: 12px; }
+  .block-head { display: flex; align-items: center; gap: 12px; }
+  .block-head::before { content: ""; width: 4px; align-self: stretch; border-radius: 2px; background: var(--accent); }
+  .block-head h2 { font-size: 18px; font-weight: 650; letter-spacing: -0.01em; }
+  .block-head p { font-size: 13px; color: var(--ink2); }
+  .grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; }
+  .c12 { grid-column: span 12; } .c8 { grid-column: span 8; } .c6 { grid-column: span 6; } .c4 { grid-column: span 4; }
+  @media (max-width: 880px) { .c8, .c6, .c4 { grid-column: span 12; } }
+
+  .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 16px 18px; min-width: 0; box-shadow: 0 1px 2px rgba(15,31,61,0.04); }
+  .card h3 { font-size: 15px; font-weight: 650; line-height: 1.35; letter-spacing: -0.005em; }
+  .card .sub { font-size: 12.5px; color: var(--ink2); margin-top: 2px; }
+  .card .cap { font-size: 12.5px; color: var(--ink2); margin-top: 8px; }
+  .card .src { font-size: 11.5px; color: var(--muted); margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--grid); }
+  .stats { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 12px; padding: 8px 12px; background: var(--wash); border-radius: 8px; }
+  .stats div { font-size: 12px; color: var(--ink2); line-height: 1.3; }
+  .stats b { display: block; font-size: 15px; color: var(--ink); font-weight: 650; }
+
+  /* hero: advice and gauge */
+  .hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 28px; border-left: 5px solid var(--muted); padding: 20px 22px; }
+  @media (max-width: 880px) { .hero { grid-template-columns: 1fr; gap: 20px; } }
+  .hero.s-crit { border-left-color: var(--crit); } .hero.s-warn { border-left-color: var(--warn); }
+  .hero.s-serious { border-left-color: var(--serious); } .hero.s-good { border-left-color: var(--good); }
+  .hero.s-info { border-left-color: var(--accent); }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px; border-radius: 999px; font-size: 12.5px; font-weight: 600; border: 1px solid var(--ring); background: var(--wash); }
+  .chip svg { width: 15px; height: 15px; flex: none; }
+  .chip.s-crit svg { color: var(--crit); } .chip.s-warn svg { color: var(--warn); } .chip.s-serious svg { color: var(--serious); }
+  .chip.s-good svg { color: var(--good); } .chip.s-info svg { color: var(--accent); } .chip.s-mute svg { color: var(--muted); }
+  .hero .msg { font-size: 22px; line-height: 1.3; font-weight: 650; letter-spacing: -0.012em; margin: 10px 0 10px; max-width: 34ch; }
+  .hero ul { margin: 0; padding-left: 18px; color: var(--ink2); font-size: 13.5px; display: grid; gap: 2px; }
+  .hero .basis { margin-top: 12px; font-size: 12px; color: var(--ink2); max-width: 62ch; }
+  .gauge-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: var(--ink2); }
+  .gauge-head b { font-size: 32px; font-weight: 650; color: var(--ink); letter-spacing: -0.02em; }
+  .gauge-head b small { font-size: 16px; font-weight: 500; color: var(--ink2); }
+  .g-wrap { position: relative; height: 78px; margin-top: 8px; }
+  .g-track { position: absolute; left: 0; right: 0; top: 16px; height: 12px; display: flex; gap: 2px; }
+  .g-track i { display: block; height: 100%; }
+  .g-track i:first-child { border-radius: 6px 2px 2px 6px; } .g-track i:last-child { border-radius: 2px 6px 6px 2px; }
+  .g-dry { background: color-mix(in srgb, var(--warn) 60%, var(--surface)); }
+  .g-ok { background: color-mix(in srgb, var(--accent) 38%, var(--surface)); }
+  .g-wet { background: color-mix(in srgb, var(--accent) 80%, var(--surface)); }
+  .g-pin { position: absolute; top: 10px; width: 4px; height: 24px; margin-left: -2px; border-radius: 2px; background: var(--ink); box-shadow: 0 0 0 2px var(--surface); }
+  .g-tick { position: absolute; top: 34px; transform: translateX(-50%); font-size: 12px; color: var(--ink2); }
+  .g-tick::before { content: ""; position: absolute; left: 50%; top: -6px; height: 5px; border-left: 1px solid var(--axis); }
+  .g-zones { display: flex; gap: 14px; font-size: 12.5px; color: var(--ink2); position: absolute; left: 0; top: 58px; }
+  .g-zones span { display: inline-flex; align-items: center; gap: 5px; }
+  .g-zones i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .seen { margin-top: 10px; font-size: 12.5px; color: var(--ink2); }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-top: 14px; }
+  .kpi { display: flex; gap: 12px; align-items: center; padding: 14px 16px; }
+  .kpi .ico { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; flex: none; background: var(--wash); color: var(--accent); }
+  .kpi .ico svg { width: 22px; height: 22px; }
+  .kpi .l { font-size: 13px; color: var(--ink2); }
+  .kpi .v { font-size: 26px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.15; }
+  .kpi .v small { font-size: 14px; font-weight: 500; color: var(--ink2); letter-spacing: 0; margin-left: 2px; }
+  .kpi .s { font-size: 12px; color: var(--ink2); }
+
+  .plot { position: relative; margin-top: 12px; }
+  .plot.h1 { height: 280px; } .plot.h2 { height: 64px; margin-top: 2px; } .plot.h3 { height: 240px; } .plot.h4 { height: 340px; }
+  .plot canvas { display: block; }
+  .plot .empty { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; text-align: center; padding: 0 24px;
+                 color: var(--ink2); font-size: 13.5px; border: 1px dashed var(--axis); border-radius: 10px; background: var(--wash); }
+  .plot.is-empty .empty { display: flex; }
+  .plot.is-empty canvas { visibility: hidden; }
+
+  .tablewrap { overflow: auto; max-height: 360px; margin-top: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  th { color: var(--ink2); font-weight: 600; position: sticky; top: 0; background: var(--surface); border-bottom: 2px solid var(--axis); }
+  td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:hover { background: var(--wash); }
+  details { font-size: 13px; }
+  summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+
+  .status { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; }
+  .status svg { width: 14px; height: 14px; }
+  .status.crit svg { color: var(--crit); } .status.warn svg { color: var(--warn); } .status.good svg { color: var(--good); } .status.info svg { color: var(--accent); }
+  .alerts { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; max-height: 360px; overflow: auto; }
+  .alerts li { display: grid; gap: 1px; padding-bottom: 10px; border-bottom: 1px solid var(--grid); }
+  .alerts li:last-child { border-bottom: 0; padding-bottom: 0; }
+  .alerts .when { font-size: 12.5px; color: var(--ink2); }
+
+  .ctl { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: end; }
+  .ctl .grp { display: grid; gap: 4px; font-size: 12.5px; color: var(--ink2); }
+  .ctl .sep { flex: 1 1 100%; border-top: 1px solid var(--grid); margin: 2px 0; }
+  .ctl-msg { margin-top: 10px; min-height: 1.4em; font-size: 13.5px; }
+
+  .bench-item + .bench-item { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--grid); }
+  .bench-item h4 { margin: 0; font-size: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .tag { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; border: 1px solid var(--axis); color: var(--ink2); font-weight: 500; }
+  .foot { font-size: 12.5px; color: var(--ink2); max-width: 90ch; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 12.5l3 3 5-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 15.5a4 4 0 0 1-.4-7.98A5.5 5.5 0 0 1 17 9a3.5 3.5 0 0 1 .5 6.5H7zM9 19l-1 2M13 19l-1 2M17 19l-1 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 9v6M14 9v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 11v5M12 8h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l9 16H3L12 4zM12 10v4M12 17h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-temp" viewBox="0 0 24 24"><path d="M14 14.76V5.5a2.5 2.5 0 0 0-5 0v9.26a4.5 4.5 0 1 0 5 0z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9M6.4 6.6a8 8 0 1 0 11.2 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-water" viewBox="0 0 24 24"><path d="M3 9c2 0 2 2 4.5 2S10 9 12 9s2.500 2 4.500 2S19 9 21 9M3 15c2 0 2 2 4.500 2S10 15 12 15s2.500 2 4.500 2S19 15 21 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  </defs>
+</svg>
+
+<div class="band">
+  <div class="band-in">
+    <svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5s6.5 6.8 6.5 11.7a6.5 6.5 0 0 1-13 0C5.5 9.3 12 2.5 12 2.5z" fill="#fff" opacity=".18"/><path d="M12 2.5s6.5 6.8 6.5 11.7a6.5 6.5 0 0 1-13 0C5.5 9.3 12 2.5 12 2.5z" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.8 14.5a3.3 3.3 0 0 0 3.2 3" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/></svg>
+    <div><h1>JalBhoomi dashboard</h1><small>Autonomous drip irrigation and water use monitoring</small></div>
+    <div class="stamp" id="stamp"></div>
+  </div>
+</div>
+<header class="bar">
+  <div class="bar-in">
+    <label class="field">Zone <select id="device" aria-label="Zone"></select></label>
+    <label class="field">Consolidated data <select id="source" aria-label="Where consolidated data is read from"><option value="local">local database</option><option value="cloud">cloud database</option></select></label>
+    <div class="seg" role="group" aria-label="Time range for the readings charts">
+      <button type="button" data-range="6h" aria-pressed="false">6 hours</button>
+      <button type="button" data-range="24h" aria-pressed="true">24 hours</button>
+      <button type="button" data-range="7d" aria-pressed="false">7 days</button>
+    </div>
+    <div class="grow">
+      <button class="btn icon" id="refresh" title="Refresh now" aria-label="Refresh now"><svg><use href="#i-refresh"/></svg></button>
+      <button class="btn icon" id="theme" title="Switch light or dark" aria-label="Switch light or dark theme"><svg><use href="#i-theme"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div>
+    <div id="banner" class="notice"><span id="bannerText">Loading...</span></div>
+    <p id="err" class="err" hidden></p>
+  </div>
+
+  <section class="block" aria-label="Right now">
+    <div class="card hero" id="hero">
+      <div>
+        <span class="chip s-mute" id="chip"><svg><use href="#i-info"/></svg><span id="chipText">Loading</span></span>
+        <p class="msg" id="msg">Loading the advice...</p>
+        <ul id="reasons"></ul>
+        <p class="basis" id="basis"></p>
+      </div>
+      <div>
+        <div class="gauge-head"><span>Soil moisture now</span><b id="gVal">-</b></div>
+        <div class="g-wrap" id="gauge" role="img" aria-label="Soil moisture gauge">
+          <div class="g-track"><i class="g-dry"></i><i class="g-ok"></i><i class="g-wet"></i></div>
+          <div class="g-pin" id="gPin" hidden></div>
+          <span class="g-tick num" id="gT1"></span><span class="g-tick num" id="gT2"></span>
+          <div class="g-zones"><span><i class="g-dry"></i>Too dry</span><span><i class="g-ok"></i>Target range</span><span><i class="g-wet"></i>Wet</span></div>
+        </div>
+        <p class="seen" id="seen"></p>
+      </div>
+    </div>
+    <div class="kpis" id="kpis"></div>
+  </section>
+
+  <section class="block">
+    <div class="block-head"><h2>Soil moisture and pump</h2><p id="readSub">Every stored reading, from the local database.</p></div>
+    <div class="grid">
+      <div class="card c8">
+        <h3 id="soilTitle">Soil moisture over time</h3>
+        <p class="sub">Line: mean of each interval. Shaded band: lowest to highest reading. Blue zone: target range between the dry and wet thresholds.</p>
+        <div class="stats" id="soilStats"></div>
+        <div class="plot h1"><canvas id="cSoil" role="img" aria-label="Soil moisture over time"></canvas><div class="empty"></div></div>
+        <div class="plot h2"><canvas id="cPump" role="img" aria-label="Share of each interval the pump was on"></canvas><div class="empty"></div></div>
+        <p class="cap">Lower strip: share of each interval the pump was on.</p>
+        <p class="src" data-src="readings"></p>
+      </div>
+      <div class="card c4">
+        <h3 id="bandTitle">Pump use by soil moisture level</h3>
+        <p class="sub">Share of readings with the pump on, in each 10-point band of soil moisture.</p>
+        <div class="plot h4"><canvas id="cBand" role="img" aria-label="Pump use by soil moisture band"></canvas><div class="empty"></div></div>
+        <p class="cap">The pump should run mostly at low soil moisture and stop once the soil is wet.</p>
+        <p class="src" data-src="readings"></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-head"><h2>Water used</h2><p>From the flow sensor. Litres depend on its calibration.</p></div>
+    <div class="grid">
+      <div class="card c6"><h3 id="flowTitle">Water per interval</h3><p class="sub" id="flowSub">Litres that passed the flow sensor in each interval.</p>
+        <div class="plot h3"><canvas id="cFlow" role="img" aria-label="Water used per interval"></canvas><div class="empty"></div></div><p class="src" data-src="readings"></p></div>
+      <div class="card c6"><h3 id="cumTitle">Total water used</h3><p class="sub">Running total in litres since the first reading shown.</p>
+        <div class="plot h3"><canvas id="cCum" role="img" aria-label="Cumulative water volume"></canvas><div class="empty"></div></div><p class="src" data-src="readings"></p></div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-head"><h2>Daily summary</h2><p id="dailySub">Consolidated per day (Indian Standard Time), from the local database.</p></div>
+    <div class="grid">
+      <div class="card c6"><h3 id="dailyTitle">Litres per day</h3><p class="sub" id="limitSub">Dashed lines show the daily limits, if set.</p>
+        <div class="plot h3"><canvas id="cDaily" role="img" aria-label="Litres per day"></canvas><div class="empty"></div></div><p class="src" data-src="daily"></p></div>
+      <div class="card c6"><h3>Soil moisture per day</h3><p class="sub">Bar: lowest to highest reading of the day. Dot: the day's mean. Zones as in the main chart.</p>
+        <div class="plot h3"><canvas id="cRange" role="img" aria-label="Soil moisture range per day"></canvas><div class="empty"></div></div><p class="src" data-src="daily"></p></div>
+      <div class="card c12"><details><summary>Show the daily values as a table</summary><div class="tablewrap" id="dailyTable"></div></details></div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-head"><h2>Irrigation cycles and alerts</h2><p>A cycle is one run of the pump. Alerts include water use above or below the limits.</p></div>
+    <div class="grid">
+      <div class="card c8"><h3>Cycles</h3><div class="tablewrap" id="cycles">Loading...</div></div>
+      <div class="card c4"><h3>Alerts</h3><div id="alerts">Loading...</div></div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-head"><h2>Control and limits</h2><p>Changes need the backend API key, kept only in this browser tab. The board checks every command against its safety rules and may refuse it.</p></div>
+    <div class="card">
+      <div class="ctl">
+        <div class="grp"><label for="key">API key</label><input id="key" type="password" autocomplete="off" placeholder="API key"></div>
+        <div class="grp"><label for="dur">Run for (seconds, 1 to 30)</label><input id="dur" type="number" min="1" max="30" value="10"></div>
+        <button class="btn primary" id="start">Start pump</button>
+        <button class="btn danger" id="stop">Stop pump</button>
+        <button class="btn" id="autoOn">Auto mode on</button>
+        <button class="btn" id="autoOff">Auto mode off</button>
+        <div class="sep"></div>
+        <div class="grp"><label for="lmin">Daily minimum (litres)</label><input id="lmin" type="number" min="0" step="0.1"></div>
+        <div class="grp"><label for="lmax">Daily maximum (litres)</label><input id="lmax" type="number" min="0" step="0.1"></div>
+        <button class="btn" id="saveLimits">Save limits</button>
+        <button class="btn" id="check">Check usage now</button>
+        <button class="btn" id="sync">Send consolidated data to cloud</button>
+      </div>
+      <p class="ctl-msg" id="ctlMsg" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-head"><h2>Model evaluation on public datasets</h2><p>These scores describe the datasets, not the JalBhoomi hardware.</p></div>
+    <div class="card" id="bench">Loading...</div>
+  </section>
+
+  <p class="foot">Times are Indian Standard Time. Each chart states where its numbers come from: values from a dataset replay or the simulator are not measurements of the JalBhoomi hardware.</p>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const isNum = (v) => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
+const fmt = (v, d = 1) => isNum(v) ? Number(v).toFixed(d) : "-";
+// The API sends some times without a zone suffix; they are UTC, so add "Z" before parsing.
+const parseTs = (ts) => new Date(typeof ts === "string" && !/(Z|[+-]\d\d:?\d\d)$/i.test(ts) ? ts + "Z" : ts);
+const IST = "Asia/Kolkata";
+const fTime = new Intl.DateTimeFormat("en-IN", {timeZone: IST, hour: "2-digit", minute: "2-digit", hour12: false});
+const fDay = new Intl.DateTimeFormat("en-IN", {timeZone: IST, day: "2-digit", month: "short"});
+const fFull = new Intl.DateTimeFormat("en-IN", {timeZone: IST, day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false});
+const fDayUtc = new Intl.DateTimeFormat("en-IN", {timeZone: "UTC", day: "2-digit", month: "short"});
+const todayIST = () => new Date().toLocaleDateString("en-CA", {timeZone: IST});
+const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const alpha = (hex, a) => { const h = hex.replace("#", ""); const n = parseInt(h.length === 3 ? h.replace(/./g, "$&$&") : h, 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; };
+const ICON = (id) => `<svg aria-hidden="true"><use href="#${id}"/></svg>`;
+
+const RANGES = {"6h": 360, "24h": 1440, "7d": 10000};
+const RANGE_TEXT = {"6h": "6 hours", "24h": "24 hours", "7d": "7 days"};
+let range = "24h";
+let state = null;
+const charts = {};
+
+/* ---------------------------------------------------------------- api */
+function key() { try { return sessionStorage.getItem("jbkey") || ""; } catch (e) { return ""; } }
+$("key").value = key();
+$("key").addEventListener("change", () => { try { sessionStorage.setItem("jbkey", $("key").value); } catch (e) {} });
+
+async function api(path, opts = {}) {
+  const headers = Object.assign({}, opts.headers || {});
+  if (opts.body) headers["Content-Type"] = "application/json";
+  if (opts.write) headers["X-API-Key"] = $("key").value;
+  const r = await fetch(path, {method: opts.method || "GET", headers, body: opts.body ? JSON.stringify(opts.body) : undefined});
+  if (!r.ok) {
+    let detail = "";
+    try { detail = (await r.json()).detail; } catch (e) {}
+    const err = new Error(typeof detail === "string" && detail ? detail : `HTTP ${r.status}`);
+    err.status = r.status;
+    throw err;
+  }
+  return r.json();
+}
+
+/* ---------------------------------------------------------------- chart plumbing */
+function showEmpty(id, msg) {
+  const box = $(id).parentElement;
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+  if (msg) { box.classList.add("is-empty"); box.querySelector(".empty").textContent = msg; }
+  else { box.classList.remove("is-empty"); }
+}
+function mk(id, cfg) {
+  if (typeof Chart === "undefined") { showEmpty(id, "The chart library did not load. Check the internet connection and refresh."); return; }
+  showEmpty(id, null);
+  charts[id] = new Chart($(id), cfg);
+}
+// target-range shading: amber below the dry threshold, blue between dry and wet
+const zones = {id: "zones", beforeDraw(chart) {
+  const z = chart.options.plugins.zones;
+  if (!z) return;
+  const y = chart.scales.y, a = chart.chartArea, c = chart.ctx;
+  const y0 = y.getPixelForValue(y.min), yd = y.getPixelForValue(z.dry), yw = y.getPixelForValue(z.wet);
+  c.save();
+  c.fillStyle = "rgba(250,178,25,0.14)"; c.fillRect(a.left, yd, a.right - a.left, y0 - yd);
+  c.fillStyle = alpha(css("--accent"), 0.08); c.fillRect(a.left, yw, a.right - a.left, yd - yw);
+  c.restore();
+}};
+const crosshair = {id: "crosshair", afterDatasetsDraw(chart) {
+  const act = chart.tooltip && chart.tooltip.getActiveElements ? chart.tooltip.getActiveElements() : [];
+  if (!act.length) return;
+  const x = act[0].element.x, a = chart.chartArea, c = chart.ctx;
+  c.save(); c.strokeStyle = css("--axis"); c.lineWidth = 1; c.beginPath(); c.moveTo(x, a.top); c.lineTo(x, a.bottom); c.stroke(); c.restore();
+}};
+const refLines = {id: "refLines", afterDatasetsDraw(chart) {
+  const list = chart.options.plugins.refLines || [];
+  const y = chart.scales.y, a = chart.chartArea, c = chart.ctx;
+  list.forEach((it) => {
+    if (!isNum(it.value)) return;
+    const py = y.getPixelForValue(it.value);
+    if (py < a.top - 1 || py > a.bottom + 1) return;
+    c.save(); c.strokeStyle = css("--ink2"); c.lineWidth = 1.25; c.setLineDash([5, 4]);
+    c.beginPath(); c.moveTo(a.left, py); c.lineTo(a.right, py); c.stroke(); c.setLineDash([]);
+    c.fillStyle = css("--ink2"); c.font = "12px system-ui, sans-serif"; c.textAlign = "right"; c.textBaseline = "bottom";
+    c.fillText(it.text, a.right - 4, py - 3); c.restore();
+  });
+}};
+// label the last point of a line, e.g. "41%"
+const endLabel = {id: "endLabel", afterDatasetsDraw(chart) {
+  const o = chart.options.plugins.endLabel;
+  if (!o) return;
+  const meta = chart.getDatasetMeta(o.dataset), data = chart.data.datasets[o.dataset].data;
+  let i = data.length - 1;
+  while (i >= 0 && !isNum(data[i])) i--;
+  if (i < 0 || !meta.data[i]) return;
+  const p = meta.data[i], c = chart.ctx;
+  c.save();
+  c.fillStyle = o.color; c.strokeStyle = css("--surface"); c.lineWidth = 2;
+  c.beginPath(); c.arc(p.x, p.y, 4.5, 0, Math.PI * 2); c.stroke(); c.fill();
+  c.fillStyle = css("--ink"); c.font = "600 12px system-ui, sans-serif"; c.textAlign = "left"; c.textBaseline = "middle";
+  c.fillText(o.text, p.x + 9, p.y); c.restore();
+}};
+// value on top of each bar when there are few bars
+const barValues = {id: "barValues", afterDatasetsDraw(chart) {
+  const o = chart.options.plugins.barValues;
+  if (!o) return;
+  const meta = chart.getDatasetMeta(o.dataset), data = chart.data.datasets[o.dataset].data, c = chart.ctx;
+  if (data.length > 16) return;
+  c.save(); c.fillStyle = css("--ink"); c.font = "600 12px system-ui, sans-serif"; c.textAlign = "center"; c.textBaseline = "bottom";
+  meta.data.forEach((bar, i) => { if (isNum(data[i])) c.fillText(fmt(data[i], 1), bar.x, bar.y - 4); });
+  c.restore();
+}};
+function chartBase(extra = {}) {
+  return Object.assign({
+    responsive: true, maintainAspectRatio: false, animation: false,
+    interaction: {mode: "index", intersect: false},
+    layout: {padding: {top: 6, right: 6}},
+  }, extra);
+}
+const xAxis = (extra = {}) => Object.assign({grid: {display: false}, border: {color: css("--axis")}, ticks: {color: css("--ink2"), maxTicksLimit: 7, maxRotation: 0, autoSkipPadding: 12}}, extra);
+const yAxis = (extra = {}) => Object.assign({grid: {color: css("--grid")}, border: {display: false}, ticks: {color: css("--ink2"), maxTicksLimit: 6}, afterFit: (s) => { s.width = 56; }}, extra);
+const yTitle = (t) => ({display: true, text: t, color: css("--ink2"), font: {size: 12, weight: "500"}});
+function tooltip(extra = {}) {
+  return Object.assign({
+    backgroundColor: css("--surface"), titleColor: css("--ink2"), bodyColor: css("--ink"), borderColor: css("--axis"), borderWidth: 1,
+    padding: 10, cornerRadius: 8, boxWidth: 12, boxHeight: 3, boxPadding: 4, usePointStyle: false, bodyFont: {weight: "600"}, titleFont: {weight: "500"},
+  }, extra);
+}
+const legend = (extra = {}) => ({position: "top", align: "start", labels: Object.assign({color: css("--ink2"), boxWidth: 14, boxHeight: 3, padding: 14}, extra)});
+
+/* ---------------------------------------------------------------- data shaping */
+function bucketize(rows, target = 240) {
+  const size = Math.max(1, Math.ceil(rows.length / target));
+  const wide = range === "7d";
+  const o = {size, full: [], short: [], soilMean: [], soilMin: [], soilMax: [], flow: [], pump: [], cum: [], hasFlow: false, hasSoil: false};
+  let run = 0;
+  for (let i = 0; i < rows.length; i += size) {
+    const g = rows.slice(i, i + size);
+    const t = parseTs(g[g.length - 1].ts);
+    o.full.push(fFull.format(t));
+    o.short.push(wide ? fDay.format(t) : fTime.format(t));
+    const soil = g.map((r) => r.soil_pct_mean).filter(isNum).map(Number);
+    o.hasSoil = o.hasSoil || soil.length > 0;
+    o.soilMean.push(soil.length ? soil.reduce((s, v) => s + v, 0) / soil.length : null);
+    o.soilMin.push(soil.length ? Math.min(...soil) : null);
+    o.soilMax.push(soil.length ? Math.max(...soil) : null);
+    const fl = g.map((r) => r.flow_l).filter(isNum).map(Number);
+    const sum = fl.reduce((s, v) => s + v, 0);
+    o.hasFlow = o.hasFlow || fl.length > 0;
+    run += sum;
+    o.flow.push(fl.length ? Math.round(sum * 1000) / 1000 : null);
+    o.cum.push(Math.round(run * 1000) / 1000);
+    const on = g.reduce((s, r) => s + (Number(r.pump_on_s) || 0), 0);
+    o.pump.push(Math.min(1, on / (60 * g.length)));
+  }
+  return o;
+}
+function bands(rows) {
+  const n = Array(10).fill(0), on = Array(10).fill(0);
+  rows.forEach((r) => {
+    if (!isNum(r.soil_pct_mean)) return;
+    const i = Math.max(0, Math.min(9, Math.floor(Number(r.soil_pct_mean) / 10)));
+    n[i] += 1;
+    if ((Number(r.pump_on_s) || 0) > 0) on[i] += 1;
+  });
+  return {n, pct: n.map((c, i) => (c ? Math.round(on[i] / c * 1000) / 10 : null)), labels: n.map((_, i) => `${i * 10}-${i * 10 + 10}`)};
+}
+function soilStats(rows, dry, wet) {
+  const v = rows.map((r) => r.soil_pct_mean).filter(isNum).map(Number);
+  if (!v.length) return null;
+  const n = v.length, share = (f) => Math.round(v.filter(f).length / n * 100);
+  return {n, latest: v[v.length - 1], mean: v.reduce((s, x) => s + x, 0) / n, min: Math.min(...v), max: Math.max(...v),
+          inRange: share((x) => x >= dry && x < wet), below: share((x) => x < dry), above: share((x) => x >= wet)};
+}
+function pumpShare(rows, test) {
+  const sel = rows.filter((r) => isNum(r.soil_pct_mean) && test(Number(r.soil_pct_mean)));
+  return sel.length ? Math.round(sel.filter((r) => (Number(r.pump_on_s) || 0) > 0).length / sel.length * 100) : null;
+}
+
+/* ---------------------------------------------------------------- drawing */
+const NOROWS = "No readings in this period. Load data first: replay a dataset, run the simulator, or connect the board.";
+const noFlowText = (id) => id && id.startsWith("dataset-replay")
+  ? "This zone has no flow data: the public dataset has no flow-sensor column. Choose the simulator zone, or load the board's log."
+  : "No flow readings for this zone yet.";
+
+function drawSoil(rows, b, dry, wet) {
+  const C = {aqua: css("--aqua"), orange: css("--orange")};
+  const st = soilStats(rows, dry, wet);
+  if (!st) { $("soilTitle").textContent = "Soil moisture over time"; $("soilStats").hidden = true; showEmpty("cSoil", NOROWS); showEmpty("cPump", NOROWS); return; }
+  $("soilStats").hidden = false;
+  $("soilTitle").textContent = `Soil moisture was in the target range for ${st.inRange}% of readings`;
+  const cell = (l, v) => `<div>${esc(l)}<b class="num">${esc(v)}</b></div>`;
+  $("soilStats").innerHTML = cell("Latest", fmt(st.latest, 1) + "%") + cell("Average", fmt(st.mean, 1) + "%") + cell("Lowest", fmt(st.min, 1) + "%") + cell("Highest", fmt(st.max, 1) + "%") +
+    cell(`Below ${dry}% (too dry)`, st.below + "% of readings") + cell(`In ${dry} to ${wet}%`, st.inRange + "% of readings") + cell(`Above ${wet}%`, st.above + "% of readings");
+  mk("cSoil", {type: "line", plugins: [zones, crosshair, refLines, endLabel], data: {labels: b.short, datasets: [
+    {label: "Min", data: b.soilMin, borderWidth: 0, pointRadius: 0, pointHoverRadius: 0, fill: false},
+    {label: "Lowest to highest reading", data: b.soilMax, borderWidth: 0, pointRadius: 0, pointHoverRadius: 0, backgroundColor: alpha(C.aqua, 0.20), fill: "-1"},
+    {label: "Soil moisture (mean)", data: b.soilMean, borderColor: C.aqua, backgroundColor: C.aqua, borderWidth: 2, pointRadius: 0,
+     pointHoverRadius: 5, pointHoverBorderWidth: 2, pointHoverBorderColor: css("--surface"), tension: 0.25, spanGaps: false},
+  ]}, options: chartBase({
+    layout: {padding: {top: 6, right: 52}},
+    scales: {x: xAxis({ticks: {display: false}}), y: yAxis({min: 0, max: 100, ticks: {color: css("--ink2"), stepSize: 25, callback: (v) => v + "%"}, title: yTitle("Soil moisture")})},
+    plugins: {
+      legend: legend({filter: (i) => i.datasetIndex !== 0}),
+      zones: {dry, wet},
+      refLines: [{value: dry, text: `dry below ${dry}%`}, {value: wet, text: `wet at ${wet}%`}],
+      endLabel: {dataset: 2, color: C.aqua, text: fmt(b.soilMean.filter(isNum).slice(-1)[0], 0) + "%"},
+      tooltip: tooltip({filter: (i) => i.datasetIndex === 2, callbacks: {
+        title: (it) => b.full[it[0].dataIndex],
+        label: (it) => `Soil moisture (mean)  ${fmt(it.parsed.y, 1)}%`,
+        afterBody: (it) => { const i = it[0].dataIndex; return `Lowest to highest  ${fmt(b.soilMin[i], 1)}% to ${fmt(b.soilMax[i], 1)}%`; },
+      }}),
+    },
+  })});
+  mk("cPump", {type: "bar", plugins: [crosshair], data: {labels: b.short, datasets: [
+    {label: "Pump on", data: b.pump.map((v) => Math.round(v * 100)), backgroundColor: C.orange, borderRadius: {topLeft: 2, topRight: 2}, barPercentage: 1, categoryPercentage: 1},
+  ]}, options: chartBase({
+    layout: {padding: {top: 2, right: 52}},
+    scales: {x: xAxis(), y: yAxis({min: 0, max: 100, grid: {display: false}, ticks: {color: css("--ink2"), stepSize: 100, callback: (v) => v === 100 ? "on" : v === 0 ? "off" : ""}})},
+    plugins: {legend: {display: false}, tooltip: tooltip({callbacks: {title: (it) => b.full[it[0].dataIndex], label: (it) => `Pump on for ${it.parsed.y}% of the interval`}})},
+  })});
+}
+
+function drawBand(rows, dry, wet) {
+  const C = {orange: css("--orange")};
+  const bd = bands(rows);
+  if (!bd.n.some((c) => c > 0)) { $("bandTitle").textContent = "Pump use by soil moisture level"; showEmpty("cBand", NOROWS); return; }
+  const a = pumpShare(rows, (s) => s < dry), w = pumpShare(rows, (s) => s >= wet);
+  $("bandTitle").textContent = a === null ? "Pump use by soil moisture level"
+    : `Pump was on in ${a}% of the readings with dry soil${w === null ? "" : ` and ${w}% of those with wet soil`}`;
+  const labels = bd.labels.slice().reverse(), pct = bd.pct.slice().reverse(), cnt = bd.n.slice().reverse();
+  mk("cBand", {type: "bar", data: {labels, datasets: [
+    {label: "Readings with the pump on", data: pct, backgroundColor: C.orange, borderRadius: {topRight: 4, bottomRight: 4}, maxBarThickness: 20},
+  ]}, options: chartBase({
+    indexAxis: "y", layout: {padding: {top: 2, right: 10}},
+    interaction: {mode: "nearest", axis: "y", intersect: false},
+    scales: {
+      x: {min: 0, max: 100, grid: {color: css("--grid")}, border: {display: false}, ticks: {color: css("--ink2"), stepSize: 25, callback: (v) => v + "%"}, title: yTitle("Readings with the pump on")},
+      y: {grid: {display: false}, border: {color: css("--axis")}, ticks: {color: css("--ink2"), autoSkip: false}, title: yTitle("Soil moisture (%)"), afterFit: (s) => { s.width = 76; }},
+    },
+    plugins: {legend: {display: false}, tooltip: tooltip({callbacks: {
+      title: (it) => `Soil moisture ${labels[it[0].dataIndex]}%`,
+      label: (it) => `Pump on in ${fmt(it.parsed.x, 1)}% of readings`,
+      afterLabel: (it) => `${cnt[it.dataIndex]} readings in this band`,
+    }})},
+  })});
+}
+
+function drawWater(b, id, coarse) {
+  const C = {blue: css("--blue")};
+  if (!b.short.length) { showEmpty("cFlow", NOROWS); showEmpty("cCum", NOROWS); return; }
+  if (!b.hasFlow) { const t = noFlowText(id); $("flowTitle").textContent = "Water per interval"; $("cumTitle").textContent = "Total water used"; showEmpty("cFlow", t); showEmpty("cCum", t); return; }
+  const mins = coarse.size;
+  const per = mins === 1 ? "minute" : mins % 60 === 0 ? (mins === 60 ? "hour" : `${mins / 60} hours`) : `${mins} minutes`;
+  const total = b.cum[b.cum.length - 1], peak = Math.max(...coarse.flow.map((v) => Number(v) || 0));
+  $("flowTitle").textContent = `Water used per ${per}`;
+  $("flowSub").textContent = `Busiest ${per}: ${fmt(peak, 2)} L. Litres that passed the flow sensor in each interval.`;
+  $("cumTitle").textContent = `${fmt(total, 1)} L of water used in the last ${RANGE_TEXT[range]}`;
+  mk("cFlow", {type: "bar", plugins: [crosshair], data: {labels: coarse.short, datasets: [
+    {label: `Litres per ${per}`, data: coarse.flow, backgroundColor: C.blue, borderRadius: {topLeft: 3, topRight: 3}, maxBarThickness: 18},
+  ]}, options: chartBase({
+    scales: {x: xAxis(), y: yAxis({min: 0, title: yTitle("litres per " + per)})},
+    plugins: {legend: {display: false}, tooltip: tooltip({callbacks: {title: (it) => coarse.full[it[0].dataIndex], label: (it) => `${fmt(it.parsed.y, 3)} L`}})},
+  })});
+  mk("cCum", {type: "line", plugins: [crosshair, endLabel], data: {labels: b.short, datasets: [
+    {label: "Total litres", data: b.cum, borderColor: C.blue, backgroundColor: alpha(C.blue, 0.12), fill: true, borderWidth: 2, pointRadius: 0, pointHoverRadius: 5,
+     pointHoverBorderWidth: 2, pointHoverBorderColor: css("--surface"), tension: 0.15},
+  ]}, options: chartBase({
+    layout: {padding: {top: 6, right: 56}},
+    scales: {x: xAxis(), y: yAxis({min: 0, title: yTitle("litres")})},
+    plugins: {legend: {display: false}, endLabel: {dataset: 0, color: C.blue, text: fmt(total, 1) + " L"},
+      tooltip: tooltip({callbacks: {title: (it) => b.full[it[0].dataIndex], label: (it) => `${fmt(it.parsed.y, 2)} L in total`}})},
+  })});
+}
+
+function drawDaily(daily, limits, dry, wet, id) {
+  const C = {blue: css("--blue"), aqua: css("--aqua")};
+  const labels = daily.map((d) => fDayUtc.format(new Date(d.day + "T00:00:00Z")));
+  if (!daily.length) { const m = "No consolidated days yet. They appear once readings are stored."; $("dailyTitle").textContent = "Litres per day"; showEmpty("cDaily", m); showEmpty("cRange", m); return; }
+  const hi = limits && isNum(limits.daily_max_litres) ? Number(limits.daily_max_litres) : null;
+  const lo = limits && isNum(limits.daily_min_litres) ? Number(limits.daily_min_litres) : null;
+  $("limitSub").textContent = hi === null && lo === null ? "No daily limits are set. Set them under Control and limits." : "Dashed lines show the daily limits.";
+  const lit = daily.map((d) => d.litres).filter(isNum).map(Number);
+  if (!lit.length) { $("dailyTitle").textContent = "Litres per day"; showEmpty("cDaily", noFlowText(id)); }
+  else {
+    const nHigh = daily.filter((d) => d.usage_status === "high").length, nLow = daily.filter((d) => d.usage_status === "low").length;
+    const avg = lit.reduce((s, v) => s + v, 0) / lit.length;
+    $("dailyTitle").textContent = `Water use averaged ${fmt(avg, 1)} L per day` + (hi === null && lo === null ? "" :
+      `; ${nHigh} day${nHigh === 1 ? "" : "s"} above the limit, ${nLow} below the minimum`);
+    const top = Math.max(...lit, hi || 0, lo || 0) * 1.2 || 1;
+    mk("cDaily", {type: "bar", plugins: [refLines, barValues], data: {labels, datasets: [
+      {label: "Litres per day", data: daily.map((d) => d.litres), backgroundColor: C.blue, borderRadius: {topLeft: 4, topRight: 4}, maxBarThickness: 26},
+    ]}, options: chartBase({
+      scales: {x: xAxis({ticks: {color: css("--ink2"), maxRotation: 0, autoSkipPadding: 10}}), y: yAxis({min: 0, max: top, title: yTitle("litres per day")})},
+      plugins: {legend: {display: false}, barValues: {dataset: 0}, refLines: [{value: hi, text: `daily maximum ${hi} L`}, {value: lo, text: `daily minimum ${lo} L`}],
+        tooltip: tooltip({callbacks: {label: (it) => `${fmt(it.parsed.y, 2)} L`, afterLabel: (it) => `${daily[it.dataIndex].cycles} irrigation cycles`}})},
+    })});
+  }
+  mk("cRange", {type: "bar", plugins: [zones, refLines], data: {labels, datasets: [
+    {type: "bar", label: "Lowest to highest", data: daily.map((d) => isNum(d.soil_min) ? [Number(d.soil_min), Number(d.soil_max)] : null), backgroundColor: alpha(C.aqua, 0.45), borderRadius: 4, borderSkipped: false, maxBarThickness: 26, order: 2},
+    {type: "line", label: "Mean", data: daily.map((d) => d.soil_mean), showLine: false, borderColor: C.aqua, backgroundColor: C.aqua, pointRadius: 5, pointHoverRadius: 6, pointBorderWidth: 2, pointBorderColor: css("--surface"), order: 1},
+  ]}, options: chartBase({
+    scales: {x: xAxis({ticks: {color: css("--ink2"), maxRotation: 0, autoSkipPadding: 10}}), y: yAxis({min: 0, max: 100, ticks: {color: css("--ink2"), stepSize: 25, callback: (v) => v + "%"}, title: yTitle("Soil moisture")})},
+    plugins: {legend: legend(), zones: {dry, wet}, refLines: [{value: dry, text: `dry ${dry}%`}, {value: wet, text: `wet ${wet}%`}],
+      tooltip: tooltip({callbacks: {label: (it) => it.dataset.type === "line" ? `Mean  ${fmt(it.parsed.y, 1)}%` : `Lowest to highest  ${fmt(daily[it.dataIndex].soil_min, 1)}% to ${fmt(daily[it.dataIndex].soil_max, 1)}%`}})},
+  })});
+}
+
+const RECO = {
+  water_now: {label: "Water now", icon: "i-drop", cls: "s-crit"},
+  water_soon: {label: "Water soon", icon: "i-clock", cls: "s-warn"},
+  skip_rain: {label: "Rain expected", icon: "i-cloud", cls: "s-info"},
+  hold_limit: {label: "Daily limit reached", icon: "i-pause", cls: "s-serious"},
+  ok: {label: "No action needed", icon: "i-check", cls: "s-good"},
+  no_data: {label: "No data yet", icon: "i-info", cls: "s-mute"},
+};
+function ago(ts) {
+  const m = Math.round((Date.now() - parseTs(ts).getTime()) / 60000);
+  if (m < 1) return "just now";
+  if (m < 90) return `${m} min ago`;
+  if (m < 2880) return `${Math.round(m / 60)} h ago`;
+  return `${Math.round(m / 1440)} days ago`;
+}
+function drawHero(reco, zone, rows, dry, wet) {
+  const r = RECO[reco.action] || RECO.no_data;
+  $("hero").className = "card hero " + r.cls;
+  $("chip").className = "chip " + r.cls;
+  $("chip").innerHTML = `${ICON(r.icon)}<span>${esc(r.label)}</span>`;
+  $("msg").textContent = reco.message;
+  $("reasons").innerHTML = (reco.reasons || []).map((x) => `<li>${esc(x)}</li>`).join("");
+  $("basis").textContent = reco.basis || "";
+  const soil = zone && isNum(zone.soil_pct) ? Number(zone.soil_pct) : null;
+  $("gVal").innerHTML = soil === null ? "-" : `${soil.toFixed(0)}<small>%</small>`;
+  const tr = document.querySelectorAll(".g-track i");
+  tr[0].style.width = `calc(${dry}% - 1px)`; tr[1].style.width = `calc(${wet - dry}% - 2px)`; tr[2].style.width = `calc(${100 - wet}% - 1px)`;
+  const pin = $("gPin");
+  pin.hidden = soil === null;
+  if (soil !== null) pin.style.left = Math.max(0, Math.min(100, soil)) + "%";
+  $("gT1").style.left = dry + "%"; $("gT1").textContent = dry; $("gT2").style.left = wet + "%"; $("gT2").textContent = wet;
+  $("gauge").setAttribute("aria-label", soil === null ? "Soil moisture gauge, no reading" : `Soil moisture ${soil.toFixed(0)} percent; dry below ${dry}, wet at ${wet}`);
+  const last = rows.length ? rows[rows.length - 1].ts : null;
+  $("seen").textContent = last ? `Latest reading ${fFull.format(parseTs(last))} IST (${ago(last)}).` : "No readings yet.";
+}
+function drawKpis(zone, daily, limits) {
+  const t = daily.find((d) => d.day === todayIST());
+  const hi = limits && isNum(limits.daily_max_litres) ? limits.daily_max_litres : null, lo = limits && isNum(limits.daily_min_litres) ? limits.daily_min_litres : null;
+  const lim = hi === null && lo === null ? "no daily limit set" : `limit ${lo ?? "-"} to ${hi ?? "-"} L`;
+  const faults = zone ? Number(zone.open_faults) : null;
+  const tile = (ico, l, v, u, s) => `<div class="card kpi"><span class="ico">${ICON(ico)}</span><div><div class="l">${esc(l)}</div><div class="v num">${esc(v)}${u ? `<small>${esc(u)}</small>` : ""}</div><div class="s">${esc(s)}</div></div></div>`;
+  $("kpis").innerHTML = [
+    tile("i-temp", "Temperature", zone ? fmt(zone.temp_c, 1) : "-", zone && isNum(zone.temp_c) ? "C" : "", "latest reading"),
+    tile("i-drop", "Air humidity", zone ? fmt(zone.hum_pct, 0) : "-", zone && isNum(zone.hum_pct) ? "%" : "", "latest reading"),
+    tile("i-power", "Pump", zone ? (zone.pump_on_recently ? "On" : "Off") : "-", "", "state in the last 5 minutes"),
+    tile("i-water", "Water today", t && isNum(t.litres) ? fmt(t.litres, 1) : "-", t && isNum(t.litres) ? "L" : "", lim),
+    tile("i-alert", "Open faults", faults === null ? "-" : String(faults), "", faults ? "needs attention" : "none"),
+  ].join("");
+}
+function drawCycles(c) {
+  if (!c.length) { $("cycles").innerHTML = '<p class="sub" style="margin-top:8px">No irrigation cycle in this period.</p>'; return; }
+  const rows = c.slice().reverse().slice(0, 100).map((x) =>
+    `<tr><td>${esc(fFull.format(parseTs(x.start_ts)))}</td><td class="r">${esc(x.minutes)}</td><td class="r">${esc(x.pump_s)}</td><td class="r">${esc(fmt(x.litres, 2))}</td>` +
+    `<td class="r">${esc(fmt(x.soil_before, 1))}</td><td class="r">${esc(fmt(x.soil_after, 1))}</td><td class="r">${esc(fmt(x.soil_rise, 1))}</td>` +
+    `<td><span class="status ${x.outcome === "fault" ? "crit" : "good"}">${ICON(x.outcome === "fault" ? "i-alert" : "i-check")}${esc(x.outcome === "fault" ? "Fault" : "Normal")}</span></td></tr>`).join("");
+  $("cycles").innerHTML = `<table><thead><tr><th>Started</th><th class="r">Minutes</th><th class="r">Pump (s)</th><th class="r">Litres</th><th class="r">Soil before (%)</th><th class="r">Soil after (%)</th><th class="r">Rise (points)</th><th>Outcome</th></tr></thead><tbody>${rows}</tbody></table>` +
+    (c.length > 100 ? `<p class="sub" style="margin-top:6px">Showing the latest 100 of ${c.length}.</p>` : "");
+}
+const ALERT_TEXT = {irrigation_start: "Irrigation started", irrigation_stop: "Irrigation stopped", predictive_skip: "Skipped because rain is forecast",
+  advisory_skip: "Skipped on advice", water_usage_high: "Water use above the daily limit", water_usage_low: "Water use below the daily minimum",
+  soil_dry_long: "Soil dry for too long", fault_no_flow: "Fault: no flow", fault_max_time: "Fault: maximum run time", fault_stuck_open: "Fault: valve stuck open"};
+function drawAlerts(a) {
+  if (!a.length) { $("alerts").innerHTML = '<p class="sub" style="margin-top:8px">No alerts.</p>'; return; }
+  $("alerts").innerHTML = '<ul class="alerts">' + a.map((x) => {
+    const fault = x.severity === "fault", notice = x.severity === "notice";
+    return `<li><span class="status ${fault ? "crit" : notice ? "warn" : "info"}">${ICON(fault ? "i-alert" : notice ? "i-info" : "i-check")}${esc(ALERT_TEXT[x.type] || x.type)}</span>` +
+      `<span class="when">${esc(fFull.format(parseTs(x.ts)))}${x.detail ? " - " + esc(x.detail) : ""}</span></li>`;
+  }).join("") + "</ul>";
+}
+function drawDailyTable(daily) {
+  if (!daily.length) { $("dailyTable").textContent = "No consolidated days yet."; return; }
+  const US = {ok: "Within limits", high: "Above the limit", low: "Below the minimum", no_limit: "No limit set", no_flow_data: "No flow data"};
+  $("dailyTable").innerHTML = `<table><thead><tr><th>Day</th><th class="r">Litres</th><th class="r">Cycles</th><th class="r">Soil min (%)</th><th class="r">Soil mean (%)</th><th class="r">Soil max (%)</th><th class="r">Temp (C)</th><th class="r">Humidity (%)</th><th class="r">Skips</th><th class="r">Faults</th><th>Water use</th></tr></thead><tbody>` +
+    daily.slice().reverse().map((d) => `<tr><td>${esc(d.day)}</td><td class="r">${esc(fmt(d.litres, 2))}</td><td class="r">${esc(d.cycles)}</td><td class="r">${esc(fmt(d.soil_min, 1))}</td><td class="r">${esc(fmt(d.soil_mean, 1))}</td><td class="r">${esc(fmt(d.soil_max, 1))}</td><td class="r">${esc(fmt(d.temp_mean, 1))}</td><td class="r">${esc(fmt(d.hum_mean, 0))}</td><td class="r">${esc(d.skips)}</td><td class="r">${esc(d.faults)}</td><td>${esc(US[d.usage_status] || d.usage_status)}</td></tr>`).join("") + "</tbody></table>";
+}
+function drawBench(b) {
+  const list = b.benchmarks || [];
+  if (!list.length) { $("bench").innerHTML = '<p class="sub">No model evaluation yet. Run tools/train_decision_model.py on a dataset.</p>'; return; }
+  $("bench").innerHTML = list.map((m) => {
+    const rowsM = (m.models || []).map((x) => `<tr${x.model === m.best_model ? ' style="font-weight:650"' : ""}><td>${esc(x.model)}${x.model === m.best_model ? " (best)" : ""}</td><td class="r">${esc(fmt(x.accuracy, 3))}</td><td class="r">${esc(fmt(x.precision, 3))}</td><td class="r">${esc(fmt(x.recall, 3))}</td><td class="r">${esc(fmt(x.f1, 3))}</td><td class="r">${esc(fmt(x.roc_auc, 3))}</td><td class="r">${esc(fmt(x.cv_f1_mean, 3))}</td></tr>`).join("");
+    const bl = m.baseline || {};
+    return `<div class="bench-item"><h4>${esc(m.name)} <span class="tag">public dataset</span></h4>` +
+      `<p class="sub">${esc(m.dataset_file)}: ${esc(m.rows)} rows, label column "${esc(m.label_column)}".</p>` +
+      `<div class="tablewrap" style="max-height:none"><table><thead><tr><th>Model</th><th class="r">Accuracy</th><th class="r">Precision</th><th class="r">Recall</th><th class="r">F1</th><th class="r">ROC-AUC</th><th class="r">5-fold F1</th></tr></thead><tbody>${rowsM}` +
+      `<tr><td>Always the majority class</td><td class="r">${esc(fmt(bl.accuracy, 3))}</td><td class="r">${esc(fmt(bl.precision, 3))}</td><td class="r">${esc(fmt(bl.recall, 3))}</td><td class="r">${esc(fmt(bl.f1, 3))}</td><td class="r">-</td><td class="r">-</td></tr></tbody></table></div>` +
+      `<p class="cap">${esc(m.verdict)}</p></div>`;
+  }).join("") + `<p class="cap">${esc(b.note)}</p>`;
+}
+
+/* ---------------------------------------------------------------- page */
+function sourceName(id) {
+  if (!id) return "";
+  if (id.startsWith("dataset-replay")) return "public dataset replayed as a live board (not JalBhoomi hardware)";
+  if (id.startsWith("sim-")) return "device simulator (invented values)";
+  return `board ${id}`;
+}
+function setBanner(id) {
+  const el = $("banner");
+  el.classList.remove("sim", "board");
+  let html;
+  if (!id) html = "<b>No zone yet.</b> Load data first: replay a dataset, run the simulator, or connect the board.";
+  else if (id.startsWith("dataset-replay")) html = "<b>Public dataset replay.</b> Not measurements from the JalBhoomi hardware. Rows of this dataset are not a continuous time series, so soil moisture jumps from one reading to the next.";
+  else if (id.startsWith("sim-")) { el.classList.add("sim"); html = "<b>Simulator.</b> All values are invented; they show that the software works and are not results."; }
+  else { el.classList.add("board"); html = `<b>Board ${esc(id)}.</b> Check the calibration values before quoting these numbers.`; }
+  $("bannerText").innerHTML = html;
+}
+function showErr(msg) { const e = $("err"); e.hidden = !msg; e.textContent = msg || ""; }
+
+function render() {
+  if (!state) return;
+  const {id, zone, rows, daily, cycles, reco, alerts, limits, th} = state;
+  const dry = isNum(th.soil_dry_pct) ? Number(th.soil_dry_pct) : 30, wet = isNum(th.soil_wet_pct) ? Number(th.soil_wet_pct) : 60;
+  const src = $("source").value === "cloud" ? "cloud database" : "local database";
+  $("dailySub").textContent = `Consolidated per day (Indian Standard Time), read from the ${src}.`;
+  $("readSub").textContent = `Every stored reading from the local database, last ${RANGE_TEXT[range]}.`;
+  document.querySelectorAll(".src").forEach((e) => {
+    e.textContent = e.dataset.src === "daily" ? `Source: ${sourceName(id)}; consolidated days from the ${src}, last 14 days.`
+      : `Source: ${sourceName(id)}; ${rows.length.toLocaleString("en-IN")} readings, last ${RANGE_TEXT[range]}.`;
+  });
+  drawHero(reco, zone, rows, dry, wet);
+  drawKpis(zone, daily, limits);
+  const b = bucketize(rows);
+  drawSoil(rows, b, dry, wet);
+  drawBand(rows, dry, wet);
+  drawWater(b, id, bucketize(rows, 48));
+  drawDaily(daily, limits, dry, wet, id);
+  drawDailyTable(daily);
+  drawCycles(cycles);
+  drawAlerts(alerts);
+}
+
+async function refresh() {
+  showErr("");
+  const id = $("device").value;
+  setBanner(id);
+  api("/benchmarks").then(drawBench).catch(() => { $("bench").innerHTML = '<p class="sub">Model results are not available.</p>'; });
+  if (!id) { state = null; return; }
+  try {
+    const q = encodeURIComponent(id), src = $("source").value;
+    const [zonesList, rows, daily, cycles, reco, alerts, limits, th] = await Promise.all([
+      api("/zones"), api(`/devices/${q}/summaries?limit=${RANGES[range]}`),
+      api(`/devices/${q}/daily?days=14&source=${src}`), api(`/devices/${q}/cycles?days=14&source=${src}`),
+      api(`/devices/${q}/recommendation`), api(`/devices/${q}/alerts?limit=12`),
+      api(`/devices/${q}/usage-limits`), api(`/devices/${q}/thresholds`)]);
+    if (document.activeElement !== $("lmin")) $("lmin").value = limits.daily_min_litres ?? "";
+    if (document.activeElement !== $("lmax")) $("lmax").value = limits.daily_max_litres ?? "";
+    state = {id, zone: zonesList.find((z) => z.device_id === id) || null, rows, daily, cycles, reco, alerts, limits, th};
+    render();
+    $("stamp").textContent = "Refreshed " + fTime.format(new Date()) + " IST";
+  } catch (e) {
+    showErr("Could not load data: " + e.message);
+  }
+}
+
+async function loadDevices() {
+  try {
+    const ids = await api("/devices");
+    const prev = $("device").value;
+    $("device").innerHTML = ids.map((i) => `<option value="${esc(i)}">${esc(i)}</option>`).join("");
+    if (prev && ids.includes(prev)) $("device").value = prev;
+  } catch (e) { showErr("Could not reach the backend: " + e.message); }
+  refresh();
+}
+
+/* ---------------------------------------------------------------- controls */
+async function command(body, okText) {
+  const id = $("device").value;
+  $("ctlMsg").textContent = "Sending...";
+  try {
+    const c = await api(`/devices/${encodeURIComponent(id)}/commands`, {method: "POST", body, write: true});
+    await new Promise((r) => setTimeout(r, 2500));
+    const list = await api(`/devices/${encodeURIComponent(id)}/commands?limit=5`);
+    const mine = list.find((x) => x.cmd_id === c.cmd_id) || c;
+    $("ctlMsg").textContent = mine.status === "accepted" ? okText + " (accepted by the board)"
+      : mine.status === "rejected" ? "Refused by the board: " + (mine.reason || "no reason given")
+      : "Sent. Waiting for the board to answer (status: " + mine.status + ").";
+  } catch (e) {
+    $("ctlMsg").textContent = e.status === 401 ? "Enter the correct API key first."
+      : e.status === 503 ? "Not delivered: the backend is not connected to the MQTT broker. " + e.message : "Failed: " + e.message;
+  }
+  refresh();
+}
+$("start").onclick = () => command({cmd: "override_on", duration_s: Math.max(1, Math.min(30, Number($("dur").value) || 10))}, "Pump started");
+$("stop").onclick = () => command({cmd: "override_off"}, "Pump stopped");
+$("autoOn").onclick = () => command({cmd: "set_auto", enabled: true}, "Auto mode on");
+$("autoOff").onclick = () => command({cmd: "set_auto", enabled: false}, "Auto mode off");
+
+async function simpleWrite(path, opts, okText) {
+  $("ctlMsg").textContent = "Working...";
+  try {
+    const r = await api(path, Object.assign({write: true}, opts));
+    $("ctlMsg").textContent = okText(r);
+  } catch (e) {
+    $("ctlMsg").textContent = e.status === 401 ? "Enter the correct API key first." : "Failed: " + e.message;
+  }
+  refresh();
+}
+const num = (v) => (v === "" ? null : Number(v));
+$("saveLimits").onclick = () => simpleWrite(`/devices/${encodeURIComponent($("device").value)}/usage-limits`,
+  {method: "PUT", body: {daily_min_litres: num($("lmin").value), daily_max_litres: num($("lmax").value)}}, () => "Limits saved.");
+$("check").onclick = () => simpleWrite(`/devices/${encodeURIComponent($("device").value)}/usage-check`, {method: "POST"},
+  (r) => r.alerts_created.length ? "New alerts: " + r.alerts_created.map((t) => ALERT_TEXT[t] || t).join(", ") : "No new alerts.");
+$("sync").onclick = () => simpleWrite(`/devices/${encodeURIComponent($("device").value)}/consolidate/sync`, {method: "POST"},
+  (r) => `Sent ${r.cycles_synced} cycles and ${r.daily_rows_synced} daily rows to the cloud database. ${r.note}`);
+
+document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => {
+  range = b.dataset.range;
+  document.querySelectorAll(".seg button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  refresh();
+}));
+$("refresh").onclick = refresh;
+$("device").onchange = refresh;
+$("source").onchange = refresh;
+$("theme").onclick = () => {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try { sessionStorage.setItem("jbtheme", next); } catch (e) {}
+  render();
+};
+try { const t = sessionStorage.getItem("jbtheme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+loadDevices();
+setInterval(refresh, 15000);
+</script>
+</body>
+</html>

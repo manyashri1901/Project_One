@@ -108,3 +108,13 @@ class Prediction(Base):
     horizon_min: Mapped[int] = mapped_column(Integer)
     dry_pct: Mapped[float] = mapped_column(Float)
     probability: Mapped[float] = mapped_column(Float)        # P(soil drops below dry_pct within horizon)
+    
+class UsageLimit(Base):
+    """Farmer/guide-set daily water limits per zone (litres). Both optional: with no limit set, no usage alert
+    is raised. These are NOT crop requirements; the right values are an agronomic decision."""
+    __tablename__ = "usage_limits"
+
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id"), primary_key=True)
+    daily_min_litres: Mapped[float | None] = mapped_column(Float, nullable=True)
+    daily_max_litres: Mapped[float | None] = mapped_column(Float, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)

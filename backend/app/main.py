@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 import pandas as pd
 
-from . import advice, config, firebase_sync, ingest
+from . import advice, config, consolidate, dashboard, firebase_sync, ingest
 from .db import Base, SessionLocal, engine, get_db
 from datetime import timedelta, timezone
 
@@ -48,6 +48,10 @@ def _prediction_loop(stop: threading.Event):
     while not stop.wait(config.PREDICTION_INTERVAL_S):
         try:
             run_prediction_job_once()
+        except Exception:
+            pass
+        try:                                   # water-usage and soil-dry alerts (needs limits set for usage alerts)
+            consolidate.run_usage_checks_all(SessionLocal)
         except Exception:
             pass
 
@@ -109,8 +113,9 @@ def read_access(request: Request, x_api_key: str = Header(default=""), authoriza
     raise HTTPException(401, "authentication required")
 
 
-app = FastAPI(title="JalBhoomi backend", version="0.3.0", lifespan=lifespan,
+app = FastAPI(title="JalBhoomi backend", version="0.4.0", lifespan=lifespan,
               dependencies=[Depends(read_access)])
+app.include_router(dashboard.make_router(require_api_key))
 
 
 def _device_or_404(db: Session, device_id: str) -> Device:
