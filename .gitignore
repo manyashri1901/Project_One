@@ -30,3 +30,9 @@ android/app/build/
 android/local.properties
 data/
 ml/results/*.joblib
+
+# trained model binaries (the small *.json result files ARE committed)
+ml/results/*.joblib
+
+# public datasets (check each licence before committing)
+data/
