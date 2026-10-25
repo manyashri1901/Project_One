@@ -23,3 +23,10 @@ summaries.csv
 backend/*.csv
 data/
 ml/results/*.joblib
+android/.gradle/
+android/.idea/
+android/build/
+android/app/build/
+android/local.properties
+data/
+ml/results/*.joblib
