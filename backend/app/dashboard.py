@@ -71,6 +71,12 @@ def make_router(api_key_dep) -> APIRouter:
     def dashboard_page():
         return FileResponse(STATIC / "dashboard.html", media_type="text/html")
 
+    # Live simulation page: moving graphs, a live log (readings, alerts, command results) and pump/scenario controls.
+    # It is a separate page (static/live.html); the existing dashboard page above is unchanged.
+    @r.get("/live", include_in_schema=False)
+    def live_page():
+        return FileResponse(STATIC / "live.html", media_type="text/html")
+
     @r.get("/devices/{device_id}/cycles")
     def get_cycles(device_id: str, days: int = Query(14, ge=1, le=365),
                    source: str = Query("local", pattern="^(local|cloud)$"), db: Session = Depends(get_db)):

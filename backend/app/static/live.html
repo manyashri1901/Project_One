@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JalBhoomi live simulation</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root { --bg:#eef2fb; --card:#fff; --ink:#0d1b3d; --mute:#5b6785; --ring:#dbe3f5;
+          --teal:#1baf7a; --blue:#2a78d6; --orange:#eb6834; --amber:#b9810f; --red:#c62828; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:1400px; margin:0 auto; padding:14px; }
+  header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+  h1 { font-size:20px; margin:0; }
+  .live { display:inline-flex; align-items:center; gap:8px; font-weight:600; color:var(--mute); }
+  .dot { width:10px; height:10px; border-radius:50%; background:#c33; }
+  .dot.on { background:var(--teal); animation:pulse 1.2s infinite; }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(27,175,122,.6)} 100%{box-shadow:0 0 0 10px rgba(27,175,122,0)} }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:10px; }
+  .card { background:var(--card); border:1px solid var(--ring); border-radius:12px; padding:12px 14px; }
+  .kpi .l { color:var(--mute); font-size:13px; }
+  .kpi .v { font-size:28px; font-weight:700; }
+  .kpi .v small { font-size:14px; font-weight:500; color:var(--mute); margin-left:2px; }
+  .main { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(320px,1fr); gap:10px; align-items:start; }
+  @media (max-width:900px) { .main { grid-template-columns:1fr; } }
+  .grid { display:grid; gap:10px; }
+  .plot { position:relative; height:210px; }
+  h2 { font-size:15px; margin:0 0 6px; }
+  .controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px; }
+  .controls label { font-size:13px; color:var(--mute); display:flex; align-items:center; gap:6px; }
+  .controls input, .controls select { padding:6px 8px; border:1px solid var(--ring); border-radius:8px; font:inherit; background:#fff; color:inherit; }
+  .controls input[type=number] { width:70px; }
+  .controls input[type=password] { width:120px; }
+  button { border:1px solid var(--ring); background:#fff; color:var(--ink); border-radius:8px; padding:6px 12px; font:inherit; cursor:pointer; }
+  button:hover { background:#f2f6ff; }
+  button.go { background:var(--blue); border-color:var(--blue); color:#fff; }
+  button.stop { background:var(--orange); border-color:var(--orange); color:#fff; }
+  .sep { width:1px; align-self:stretch; background:var(--ring); margin:0 4px; }
+  .log { height:640px; overflow-y:auto; font:12.5px/1.45 ui-monospace,SFMono-Regular,Consolas,Menlo,monospace; background:#0f172a; color:#cbd5e1; border-radius:10px; padding:8px 10px; }
+  .log div { white-space:pre-wrap; word-break:break-word; border-bottom:1px solid rgba(255,255,255,.05); padding:2px 0; }
+  .log .t { color:#64748b; }
+  .log .reading { color:#94a3b8; }
+  .log .info { color:#7dd3fc; }
+  .log .notice { color:#fcd34d; }
+  .log .fault { color:#fca5a5; font-weight:700; }
+  .log .cmd { color:#86efac; }
+  .log .you { color:#f9a8d4; }
+  .logbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:8px; flex-wrap:wrap; }
+  .logbar label { font-size:13px; color:var(--mute); display:flex; gap:6px; align-items:center; }
+  .note { color:var(--mute); font-size:13px; margin:10px 0 0; }
+  .err { color:#b00020; font-weight:600; margin:8px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>JalBhoomi live simulation</h1>
+    <span class="live"><span class="dot" id="dot"></span><span id="stamp">connecting...</span></span>
+  </header>
+  <div class="err" id="err" hidden></div>
+
+  <div class="card" style="margin-bottom:10px">
+    <div class="controls">
+      <label>Zone <select id="zone"></select></label>
+      <label>API key <input type="password" id="key" placeholder="X-API-Key" autocomplete="off"></label>
+      <span class="sep"></span>
+      <label>Run for <input type="number" id="dur" value="30" min="1" max="600"> s</label>
+      <button class="go" id="bOn">Start pump</button>
+      <button class="stop" id="bOff">Stop pump</button>
+      <button id="bAutoOn">Auto on</button>
+      <button id="bAutoOff">Auto off</button>
+      <span class="sep"></span>
+      <label>Scenario
+        <select id="scn">
+          <option value="normal">normal</option>
+          <option value="rain_skip">rain_skip</option>
+          <option value="fault_no_flow">fault_no_flow</option>
+          <option value="stuck_open">stuck_open</option>
+        </select></label>
+      <button id="bScn">Apply scenario</button>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="card kpi"><div class="l">Soil moisture</div><div class="v"><span id="kSoil">-</span><small>%</small></div></div>
+    <div class="card kpi"><div class="l">Temperature</div><div class="v"><span id="kTemp">-</span><small>C</small></div></div>
+    <div class="card kpi"><div class="l">Air humidity</div><div class="v"><span id="kHum">-</span><small>%</small></div></div>
+    <div class="card kpi"><div class="l">Pump (latest readings)</div><div class="v" id="kPump">-</div></div>
+    <div class="card kpi"><div class="l">Water in this window</div><div class="v"><span id="kWater">-</span><small>L</small></div></div>
+  </div>
+
+  <div class="main">
+    <div class="grid">
+      <div class="card"><h2>Soil moisture (%) with the dry and wet limits</h2><div class="plot"><canvas id="cSoil"></canvas></div></div>
+      <div class="card"><h2>Flow (litres per reading)</h2><div class="plot"><canvas id="cFlow"></canvas></div></div>
+      <div class="card"><h2>Pump on (seconds per reading)</h2><div class="plot"><canvas id="cPump"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="logbar">
+        <h2 style="margin:0">Live log</h2>
+        <span>
+          <label><input type="checkbox" id="showReadings" checked> show every reading</label>
+          <button id="bClear" style="margin-top:4px">Clear</button>
+        </span>
+      </div>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+  <p class="note">Simulated board running faster than real time. Each point is one simulated one-minute summary. The page asks the
+     backend for new readings, alerts and command results every 2 seconds; the controls send the same commands as the dashboard.</p>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const N = Math.min(300, Math.max(20, Number(params.get("n")) || 90));      // readings shown in the graphs
+const EVERY_MS = Math.max(1000, Number(params.get("every")) || 2000);
+const DRY = 30, WET = 60;                                                  // dashboard default thresholds
+let DEVICE = params.get("device") || "sim-live-01";
+
+const $ = (id) => document.getElementById(id);
+const fTime = new Intl.DateTimeFormat("en-IN", {hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false, timeZone:"Asia/Kolkata"});
+const parseTs = (s) => new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : s + "Z");
+const isNum = (v) => typeof v === "number" && isFinite(v);
+const ALERT_TEXT = {irrigation_start:"Irrigation started", irrigation_stop:"Irrigation stopped", predictive_skip:"Skipped because rain is forecast",
+  advisory_skip:"Skipped on advice", water_usage_high:"Water use above the daily limit", water_usage_low:"Water use below the daily minimum",
+  soil_dry_long:"Soil dry for too long", fault_no_flow:"Fault: no flow", fault_max_time:"Fault: maximum run time", fault_stuck_open:"Fault: valve stuck open",
+  fault_valve_stuck_open:"Fault: valve stuck open", command_rejected:"Command rejected", command_accepted:"Command accepted by the board"};
+
+try { const k = sessionStorage.getItem("jb_key"); if (k) $("key").value = k; } catch (e) {}
+$("key").addEventListener("change", () => { try { sessionStorage.setItem("jb_key", $("key").value); } catch (e) {} });
+
+// ---------------------------------------------------------------- charts
+const common = {
+  animation:false, responsive:true, maintainAspectRatio:false, interaction:{mode:"index", intersect:false},
+  plugins:{legend:{display:false}},
+  scales:{x:{ticks:{maxTicksLimit:8, maxRotation:0}, grid:{display:false}}}
+};
+const soilChart = new Chart($("cSoil"), {type:"line", data:{labels:[], datasets:[
+  {label:"Soil %", data:[], borderColor:"#1baf7a", backgroundColor:"rgba(27,175,122,.12)", fill:true, pointRadius:0, borderWidth:2.5, tension:.25},
+  {label:"Dry limit", data:[], borderColor:"#d9a21b", borderDash:[6,4], pointRadius:0, borderWidth:1.5},
+  {label:"Wet limit", data:[], borderColor:"#2a78d6", borderDash:[6,4], pointRadius:0, borderWidth:1.5}]},
+  options:{...common, scales:{...common.scales, y:{min:0, max:100, title:{display:true, text:"%"}}}}});
+const flowChart = new Chart($("cFlow"), {type:"line", data:{labels:[], datasets:[
+  {label:"Litres", data:[], borderColor:"#2a78d6", backgroundColor:"rgba(42,120,214,.15)", fill:true, pointRadius:0, borderWidth:2.5, stepped:true}]},
+  options:{...common, scales:{...common.scales, y:{beginAtZero:true, title:{display:true, text:"L"}}}}});
+const pumpChart = new Chart($("cPump"), {type:"bar", data:{labels:[], datasets:[
+  {label:"Pump on (s)", data:[], backgroundColor:"#eb6834", barPercentage:1, categoryPercentage:1}]},
+  options:{...common, scales:{...common.scales, y:{beginAtZero:true, suggestedMax:60, title:{display:true, text:"s"}}}}});
+
+// ---------------------------------------------------------------- log
+const logEl = $("log");
+const MAX_LINES = 400;
+function addLog(kind, text, when) {
+  const d = document.createElement("div");
+  d.className = kind;
+  const t = document.createElement("span"); t.className = "t"; t.textContent = fTime.format(when || new Date()) + "  ";
+  d.appendChild(t); d.appendChild(document.createTextNode(text));
+  if (kind === "reading" && !$("showReadings").checked) d.style.display = "none";
+  logEl.insertBefore(d, logEl.firstChild);
+  while (logEl.childNodes.length > MAX_LINES) logEl.removeChild(logEl.lastChild);
+}
+$("showReadings").addEventListener("change", () => {
+  logEl.querySelectorAll(".reading").forEach((e) => { e.style.display = $("showReadings").checked ? "" : "none"; });
+});
+$("bClear").addEventListener("click", () => { logEl.textContent = ""; });
+
+// state that decides which log lines are new
+let seenReadingTs = null, seenAlerts = new Set(), seenCmd = new Set(), first = true;
+function resetStreams() { seenReadingTs = null; seenAlerts = new Set(); seenCmd = new Set(); first = true; logEl.textContent = ""; }
+
+function readingLine(x) {
+  const f = (v, d) => isNum(v) ? v.toFixed(d) : "-";
+  return `reading   soil ${f(x.soil_pct_mean,1)}%  temp ${f(x.temp_c_mean,1)} C  hum ${f(x.hum_pct_mean,0)}%  flow ${f(x.flow_l,2)} L  pump ${x.pump_on_s || 0} s` +
+         (x.faults ? `  FAULT ${x.faults}` : "") + (x.rain ? "  rain" : "");
+}
+
+// ---------------------------------------------------------------- polling
+let busy = false;
+async function getJson(path) {
+  const r = await fetch(path, {cache:"no-store"});
+  if (!r.ok) { const e = new Error(r.status === 404 ? `unknown device "${DEVICE}" (start the backend with LIVE_SIM_ENABLED=true)` : "HTTP " + r.status); e.status = r.status; throw e; }
+  return r.json();
+}
+async function tick() {
+  if (busy) return;
+  busy = true;
+  const dev = encodeURIComponent(DEVICE);
+  try {
+    const [rows, alerts, cmds] = await Promise.all([
+      getJson(`/devices/${dev}/summaries?limit=${N}`),
+      getJson(`/devices/${dev}/alerts?limit=40`).catch(() => []),
+      getJson(`/devices/${dev}/commands?limit=25`).catch(() => [])]);
+    if (!rows.length) throw new Error("no readings yet");
+    $("err").hidden = true;
+
+    // graphs
+    const labels = rows.map((x) => fTime.format(parseTs(x.ts)));
+    soilChart.data.labels = flowChart.data.labels = pumpChart.data.labels = labels;
+    soilChart.data.datasets[0].data = rows.map((x) => x.soil_pct_mean);
+    soilChart.data.datasets[1].data = rows.map(() => DRY);
+    soilChart.data.datasets[2].data = rows.map(() => WET);
+    flowChart.data.datasets[0].data = rows.map((x) => x.flow_l);
+    pumpChart.data.datasets[0].data = rows.map((x) => x.pump_on_s || 0);
+    soilChart.update("none"); flowChart.update("none"); pumpChart.update("none");
+
+    // tiles
+    const last = rows[rows.length - 1];
+    $("kSoil").textContent = isNum(last.soil_pct_mean) ? last.soil_pct_mean.toFixed(1) : "-";
+    $("kTemp").textContent = isNum(last.temp_c_mean) ? last.temp_c_mean.toFixed(1) : "-";
+    $("kHum").textContent = isNum(last.hum_pct_mean) ? last.hum_pct_mean.toFixed(0) : "-";
+    const now = (last.pump_on_s || 0) > 0, recent = rows.slice(-8).some((x) => (x.pump_on_s || 0) > 0);
+    $("kPump").textContent = now ? "ON" : recent ? "ON a moment ago" : "Off";
+    $("kPump").style.color = now ? "#eb6834" : "";
+    $("kWater").textContent = rows.reduce((a, x) => a + (x.flow_l || 0), 0).toFixed(2);
+
+    // log: collect what is new, order it by time, then add oldest first so the newest ends on top
+    const items = [];
+    if (first) {
+      alerts.slice(0, 12).forEach((a) => items.push({w:parseTs(a.ts), k:a.severity === "fault" ? "fault" : a.severity === "notice" ? "notice" : "info", t:alertText(a)}));
+      cmds.slice(0, 8).forEach((c) => items.push({w:parseTs(c.created_at), k:"cmd", t:cmdText(c)}));
+      items.push({w:new Date(), k:"you", t:`connected to ${DEVICE}`});
+    } else {
+      alerts.filter((a) => !seenAlerts.has(a.id)).forEach((a) => items.push({w:parseTs(a.ts), k:a.severity === "fault" ? "fault" : a.severity === "notice" ? "notice" : "info", t:alertText(a)}));
+      cmds.filter((c) => !seenCmd.has(c.cmd_id + "|" + c.status)).forEach((c) => items.push({w:parseTs(c.acked_at || c.created_at), k:"cmd", t:cmdText(c)}));
+      rows.filter((x) => seenReadingTs !== null && parseTs(x.ts) > seenReadingTs).forEach((x) => items.push({w:parseTs(x.ts), k:"reading", t:readingLine(x)}));
+    }
+    alerts.forEach((a) => seenAlerts.add(a.id));
+    cmds.forEach((c) => seenCmd.add(c.cmd_id + "|" + c.status));
+    seenReadingTs = parseTs(last.ts);
+    items.sort((a, b) => a.w - b.w).forEach((i) => addLog(i.k, i.t, i.w));
+    first = false;
+
+    $("dot").className = "dot on";
+    $("stamp").textContent = "LIVE - updated " + fTime.format(new Date()) + " IST";
+  } catch (e) {
+    $("dot").className = "dot";
+    $("stamp").textContent = "not updating";
+    $("err").hidden = false; $("err").textContent = "Could not load readings: " + e.message;
+  } finally { busy = false; }
+}
+function alertText(a) {
+  return `${(a.severity || "").padEnd(6)} ${ALERT_TEXT[a.type] || a.type}` + (a.detail ? `  (${a.detail})` : "");
+}
+function cmdText(c) {
+  let p = ""; try { const o = JSON.parse(c.params || "{}"); delete o.cmd; p = Object.keys(o).length ? " " + JSON.stringify(o) : ""; } catch (e) {}
+  return `command ${c.cmd}${p}  ->  ${c.status}` + (c.reason ? ` (${c.reason})` : "");
+}
+
+// ---------------------------------------------------------------- controls
+async function send(label, path, body) {
+  const key = $("key").value;
+  if (!key) { addLog("fault", "type the API key first"); return; }
+  addLog("you", "you: " + label);
+  try {
+    const r = await fetch(path, {method:"POST", headers:{"X-API-Key":key, "Content-Type":"application/json"}, body:JSON.stringify(body)});
+    let j = null; try { j = await r.json(); } catch (e) {}
+    if (r.ok) addLog("cmd", "accepted" + (j && j.status ? " - status " + j.status : ""));
+    else addLog("fault", `refused (${r.status}): ` + ((j && (j.detail && (j.detail.message || JSON.stringify(j.detail)))) || "error"));
+  } catch (e) { addLog("fault", "request failed: " + e.message); }
+  tick();
+}
+const cmdPath = () => `/devices/${encodeURIComponent(DEVICE)}/commands`;
+$("bOn").addEventListener("click", () => send(`start pump for ${$("dur").value} s`, cmdPath(), {cmd:"override_on", duration_s:Number($("dur").value) || 30}));
+$("bOff").addEventListener("click", () => send("stop pump", cmdPath(), {cmd:"override_off"}));
+$("bAutoOn").addEventListener("click", () => send("automatic mode on", cmdPath(), {cmd:"set_auto", enabled:true}));
+$("bAutoOff").addEventListener("click", () => send("automatic mode off", cmdPath(), {cmd:"set_auto", enabled:false}));
+$("bScn").addEventListener("click", () => send(`scenario ${$("scn").value}`, "/live-sim/scenario", {scenario:$("scn").value}));
+
+// ---------------------------------------------------------------- zones
+async function loadZones() {
+  try {
+    const ids = await getJson("/devices");
+    const sel = $("zone");
+    sel.innerHTML = "";
+    ids.forEach((id) => { const o = document.createElement("option"); o.value = id; o.textContent = id; sel.appendChild(o); });
+    if (!ids.includes(DEVICE) && ids.length) DEVICE = ids[0];
+    sel.value = DEVICE;
+  } catch (e) { const o = document.createElement("option"); o.textContent = DEVICE; $("zone").appendChild(o); }
+}
+$("zone").addEventListener("change", () => { DEVICE = $("zone").value; resetStreams(); tick(); });
+
+loadZones().then(() => { tick(); setInterval(tick, EVERY_MS); });
+</script>
+</body>
+</html>
